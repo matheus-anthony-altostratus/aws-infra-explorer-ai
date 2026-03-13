@@ -23,25 +23,27 @@ Project currently under development (MVP phase).
 
 aws-infra-explorer-ai
 │
-├── src
+├── src                          # Main source code of the application
 │   │
-│   ├── extractors
+│   ├── extractors               # Modules responsible for extracting infrastructure data from AWS using boto3
+│   │   ├── __init__.py
+│   │   ├── vpc_extractor.py
+│   │
+│   ├── models                   # Data models representing AWS infrastructure in a clean and structured format
+│   │   ├── infra_model.py       # Core infrastructure data model used across the project
 │   │   ├── __init__.py
 │   │
-│   ├── models
+│   ├── core                     # Core orchestration logic that coordinates extractors and builds the final model
 │   │   ├── __init__.py
 │   │
-│   ├── core
-│   │   ├── __init__.py
-│   │
-│   └── main.py
+│   └── main.py                  # Application entry point (CLI execution starts here)
 │
-├── prompts
+├── prompts                      # Prompt templates used when interacting with LLMs (Amazon Bedrock)
 │
-├── outputs
+├── outputs                      # Generated outputs such as infrastructure JSON, reports, and diagrams
 │
-├── docs
+├── docs                         # Technical documentation, architecture decisions, and design notes
 │
-├── requirements.txt
+├── requirements.txt             # Python dependencies required to run the project
 │
-└── README.md
+└── README.md                    # Project overview and documentation

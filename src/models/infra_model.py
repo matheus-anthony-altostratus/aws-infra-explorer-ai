@@ -54,3 +54,36 @@ class Instance(CloudResource):
     security_groups: List[str] = field(default_factory=list)
     public_ip: Optional[str] = None
     private_ip: Optional[str] = None
+
+@dataclass
+class InternetGateway(CloudResource):
+    vpc_id: str = ""
+
+@dataclass
+class NATGateway(CloudResource):
+    vpc_id: str = ""
+    subnet_id: str = ""
+    public_ip: Optional[str] = None
+    state: str = ""
+
+@dataclass
+class RDSInstance(CloudResource):
+    engine: str = ""
+    engine_version: str = ""
+    instance_class: str = ""
+    status: str = ""
+    vpc_id: str = ""
+    availability_zone: str = ""
+    multi_az: bool = False
+    publicly_accessible: bool = False
+    security_groups: List[str] = field(default_factory=list)
+
+@dataclass
+class InfrastructureData:
+    region: str = ""
+    vpcs: List[VPC] = field(default_factory=list)
+    internet_gateways: List[InternetGateway] = field(default_factory=list)
+    nat_gateways: List[NATGateway] = field(default_factory=list)
+    security_groups: List[SecurityGroup] = field(default_factory=list)
+    instances: List[Instance] = field(default_factory=list)
+    rds_instances: List[RDSInstance] = field(default_factory=list)

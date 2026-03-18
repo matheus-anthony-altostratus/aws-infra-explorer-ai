@@ -37,20 +37,24 @@ class VPCExtractor:
             tags = {tag["Key"]: tag["Value"] for tag in vpc_data.get("Tags", [])}
             name = tags.get("Name")
             vpc = VPC(
-            resource_id=vpc_data["VpcId"],
-            cidr_block=vpc_data["CidrBlock"],
-            name=name,
-            tags=tags,
-            subnets=[]
-        )
-        vpcs[vpc.resource_id] = vpc
+                resource_id=vpc_data["VpcId"],
+                cidr_block=vpc_data["CidrBlock"],
+                name=name,
+                tags=tags,
+                subnets=[]
+            )
+            vpcs[vpc.resource_id] = vpc
+
 
         for subnet_data in subnet_response["Subnets"]:
+            subnet_tags = {tag["Key"]: tag["Value"] for tag in subnet_data.get("Tags", [])}
             subnet = Subnet(
             resource_id=subnet_data["SubnetId"],
             cidr_block=subnet_data["CidrBlock"],
             availability_zone=subnet_data["AvailabilityZone"],
-        )
+            name=subnet_tags.get("Name"),
+            tags=subnet_tags,
+            )
             vpc_id = subnet_data["VpcId"]
             if vpc_id in vpcs:
                 vpcs[vpc_id].subnets.append(subnet)
@@ -58,17 +62,17 @@ class VPCExtractor:
         return list(vpcs.values())
 
 
-    def extract_subnets(self, vpc_id: str) -> list[Subnet]:
+        def extract_subnets(self, vpc_id: str) -> list[Subnet]:
 
-        """Retrieves all subnets from AWS and converts them into Subnet models."""
+            """Retrieves all subnets from AWS and converts them into Subnet models."""
 
         response = self.ec2_client.describe_subnets()
         subnets = []
         for subnet_data in response["Subnets"]:
             subnet = Subnet(
-            resource_id=subnet_data["SubnetId"],
-            cidr_block=subnet_data["CidrBlock"],
-            availability_zone=subnet_data["AvailabilityZone"],
-        )
-        subnets.append(subnet)
+                resource_id=subnet_data["SubnetId"],
+                cidr_block=subnet_data["CidrBlock"],
+                availability_zone=subnet_data["AvailabilityZone"],
+            )
+            subnets.append(subnet)
         return subnets

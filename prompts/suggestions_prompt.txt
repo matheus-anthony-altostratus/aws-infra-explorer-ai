@@ -4,11 +4,11 @@ I will provide you with a JSON file containing the infrastructure extracted from
 
 Structure your analysis by these pillars:
 
-1. **Operational Excellence**: Suggestions about tagging, monitoring, and automation.
-2. **Security**: Analysis of security groups, public access, encryption, and network segmentation.
-3. **Reliability**: Evaluation of Multi-AZ deployments, redundancy, and fault tolerance.
-4. **Performance Efficiency**: Analysis of instance types, resource sizing, and architecture patterns.
-5. **Cost Optimization**: Identification of potential cost savings (unused resources, oversized instances, etc.).
+1. **Operational Excellence**: Suggestions about tagging, monitoring, automation, and infrastructure as code practices.
+2. **Security**: Analysis of security groups (overly permissive rules, open ports), public access, network segmentation, VPN configuration, and Transit Gateway security.
+3. **Reliability**: Evaluation of Multi-AZ deployments, redundancy (NAT Gateways, Load Balancers), fault tolerance, VPN tunnel redundancy, and route table configuration.
+4. **Performance Efficiency**: Analysis of instance types, resource sizing, Load Balancer configuration, and architecture patterns.
+5. **Cost Optimization**: Identification of potential cost savings (unused Elastic IPs, stopped instances, oversized resources, unused VPC Peering connections, idle Load Balancers).
 
 Rules:
 - Write in Spanish.
@@ -18,6 +18,11 @@ Rules:
 - Classify each suggestion by priority: Alta, Media, or Baja.
 - Do not invent or assume data that is not in the JSON.
 - If there is not enough information to evaluate a pillar, mention what additional data would be needed.
+- Analyze route tables to identify potential routing issues or misconfigurations.
+- Check for unassociated Elastic IPs (they generate cost when not in use).
+- Evaluate Transit Gateway and VPN configurations for redundancy and best practices.
+- IMPORTANT: You MUST cover ALL resource types present in the JSON. Do not skip any section. If the response is too long, summarize each section but never omit one entirely.
+
 
 Here is the infrastructure JSON:
 

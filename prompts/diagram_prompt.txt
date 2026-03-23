@@ -10,14 +10,24 @@ The diagram must:
 4. Show NAT Gateways in their respective subnets.
 5. Show EC2 instances in their respective subnets with instance type and state.
 6. Show RDS instances in their respective VPCs with engine type.
-7. Show connections between resources (e.g., EC2 to Security Groups, NAT Gateway to Internet).
+7. Show Load Balancers with their type and scheme, connected to their target groups and instances.
+8. Show Transit Gateways as a central hub connecting VPCs and VPN connections.
+9. Show VPN connections with Customer Gateways representing on-premise connectivity.
+10. Show VPC Peering connections between VPCs.
+11. Show Elastic IPs associated to their resources.
+12. Use route table information to label subnets as Public or Private.
+13. Show Security Groups associated to EC2 instances and RDS instances. Represent each Security Group as a box with its name and key ingress/egress rules (port and source/destination). Connect Security Groups to the resources they protect.
+
 
 Rules:
 - Use Mermaid graph TD (top-down) syntax.
 - Use clear and descriptive node labels.
 - Return ONLY the Mermaid code block, no explanations before or after.
 - Make sure the Mermaid syntax is valid and can be rendered without errors.
-- Use different shapes for different resource types (e.g., rounded for compute, cylindrical for databases).
+- Use different shapes for different resource types (e.g., rounded for compute, cylindrical for databases, hexagonal for gateways).
+- Keep the diagram readable. If there are too many resources, prioritize showing connectivity and relationships over listing every single resource.
+- IMPORTANT: You MUST include ALL resource types present in the JSON in the diagram. Do not omit any resource type.
+
 
 Here is the infrastructure JSON:
 

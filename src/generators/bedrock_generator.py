@@ -19,7 +19,7 @@ class BedrockGenerator:
             accept="application/json",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 8192,
+                "max_tokens": 16384,
                 "messages": [
                     {
                         "role": "user",

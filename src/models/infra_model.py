@@ -79,6 +79,108 @@ class RDSInstance(CloudResource):
     security_groups: List[str] = field(default_factory=list)
 
 @dataclass
+class Route:
+    destination: str = ""
+    target: str = ""
+    state: str = ""
+
+@dataclass
+class RouteTable(CloudResource):
+    vpc_id: str = ""
+    subnet_associations: List[str] = field(default_factory=list)
+    routes: List[Route] = field(default_factory=list)
+    is_main: bool = False
+
+@dataclass
+class Listener:
+    port: int = 0
+    protocol: str = ""
+    target_group_arn: str = ""
+
+@dataclass
+class TargetGroup(CloudResource):
+    port: int = 0
+    protocol: str = ""
+    vpc_id: str = ""
+    target_type: str = ""
+    targets: List[str] = field(default_factory=list)
+
+@dataclass
+class LoadBalancer(CloudResource):
+    type: str = ""
+    scheme: str = ""
+    dns_name: str = ""
+    vpc_id: str = ""
+    availability_zones: List[str] = field(default_factory=list)
+    security_groups: List[str] = field(default_factory=list)
+    listeners: List[Listener] = field(default_factory=list)
+
+@dataclass
+class TGWRoute:
+    destination: str = ""
+    target_attachment_id: str = ""
+    state: str = ""
+    route_type: str = ""
+
+@dataclass
+class TGWRouteTable(CloudResource):
+    tgw_id: str = ""
+    routes: List[TGWRoute] = field(default_factory=list)
+
+@dataclass
+class TGWAttachment(CloudResource):
+    tgw_id: str = ""
+    resource_type: str = ""
+    resource_id_ref: str = ""
+    state: str = ""
+
+@dataclass
+class TransitGateway(CloudResource):
+    amazon_asn: int = 0
+    state: str = ""
+    attachments: List[TGWAttachment] = field(default_factory=list)
+    route_tables: List[TGWRouteTable] = field(default_factory=list)
+
+@dataclass
+class VPNGateway(CloudResource):
+    vpc_id: str = ""
+    state: str = ""
+    amazon_asn: int = 0
+
+@dataclass
+class CustomerGateway(CloudResource):
+    ip_address: str = ""
+    bgp_asn: str = ""
+    type: str = ""
+    state: str = ""
+
+@dataclass
+class VPNConnection(CloudResource):
+    vpn_gateway_id: str = ""
+    customer_gateway_id: str = ""
+    transit_gateway_id: str = ""
+    type: str = ""
+    state: str = ""
+    static_routes_only: bool = False
+
+@dataclass
+class ElasticIP(CloudResource):
+    public_ip: str = ""
+    association_id: str = ""
+    instance_id: str = ""
+    network_interface_id: str = ""
+    domain: str = ""
+
+@dataclass
+class VPCPeering(CloudResource):
+    requester_vpc_id: str = ""
+    requester_cidr: str = ""
+    accepter_vpc_id: str = ""
+    accepter_cidr: str = ""
+    state: str = ""
+
+
+@dataclass
 class InfrastructureData:
     region: str = ""
     vpcs: List[VPC] = field(default_factory=list)
@@ -87,6 +189,15 @@ class InfrastructureData:
     security_groups: List[SecurityGroup] = field(default_factory=list)
     instances: List[Instance] = field(default_factory=list)
     rds_instances: List[RDSInstance] = field(default_factory=list)
+    route_tables: List[RouteTable] = field(default_factory=list)
+    load_balancers: List[LoadBalancer] = field(default_factory=list)
+    target_groups: List[TargetGroup] = field(default_factory=list)
+    transit_gateways: List[TransitGateway] = field(default_factory=list)
+    vpn_gateways: List[VPNGateway] = field(default_factory=list)
+    customer_gateways: List[CustomerGateway] = field(default_factory=list)
+    vpn_connections: List[VPNConnection] = field(default_factory=list)
+    elastic_ips: List[ElasticIP] = field(default_factory=list)
+    vpc_peerings: List[VPCPeering] = field(default_factory=list)
 
 @dataclass
 class GeneratedReport:

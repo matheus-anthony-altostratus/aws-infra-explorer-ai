@@ -4,11 +4,14 @@ I will provide you with a JSON file containing the infrastructure extracted from
 
 The document must include:
 
-1. **Executive Summary**: A brief overview of the infrastructure (region, number of VPCs, instances, databases, etc.)
-2. **Network Architecture**: Description of each VPC, its CIDR block, subnets (indicating if they are public or private based on route tables or naming conventions), Internet Gateways, and NAT Gateways.
-3. **Compute Resources**: Description of EC2 instances, their types, states, VPC/subnet placement, and associated security groups.
-4. **Database Resources**: Description of RDS instances, engines, versions, availability zones, and Multi-AZ configuration.
-5. **Security Overview**: Summary of security groups and their rules, highlighting any overly permissive rules (e.g., 0.0.0.0/0 on sensitive ports).
+1. **Executive Summary**: A brief overview of the infrastructure (region, number of VPCs, instances, databases, networking components, etc.)
+2. **Network Architecture**: Description of each VPC, its CIDR block, subnets (indicating if they are public or private based on route tables analysis), Internet Gateways, NAT Gateways, and Route Tables with their routes.
+3. **Connectivity**: Description of Transit Gateways (with attachments and route tables), VPN connections (VPN Gateways, Customer Gateways, tunnels), VPC Peering connections, and how they interconnect the infrastructure.
+4. **Load Balancing**: Description of Load Balancers (type, scheme, DNS, listeners), Target Groups and their registered targets.
+5. **Compute Resources**: Description of EC2 instances, their types, states, VPC/subnet placement, and associated security groups.
+6. **Database Resources**: Description of RDS instances, engines, versions, availability zones, and Multi-AZ configuration.
+7. **Public IP Addresses**: Summary of Elastic IPs, their associations (EC2, NAT Gateway, etc.), and identification of unassociated IPs.
+8. **Security Overview**: Summary of security groups and their rules, highlighting any overly permissive rules (e.g., 0.0.0.0/0 on sensitive ports).
 
 Rules:
 - Write in Spanish.
@@ -16,6 +19,10 @@ Rules:
 - Use Markdown formatting with headers, bullet points, and tables where appropriate.
 - If a resource type has no instances, mention that none were found.
 - Do not invent or assume data that is not in the JSON.
+- Use route table analysis to determine if subnets are public (route to IGW) or private (route to NAT or no internet route).
+
+- IMPORTANT: You MUST cover ALL resource types present in the JSON. Do not skip any section. If the response is too long, summarize each section but never omit one entirely.
+
 
 Here is the infrastructure JSON:
 

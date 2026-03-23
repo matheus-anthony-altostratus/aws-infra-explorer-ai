@@ -8,8 +8,16 @@ from extractors.natgw_extractor import NATGWExtractor
 from extractors.sg_extractor import SGExtractor
 from extractors.ec2_extractor import EC2Extractor
 from extractors.rds_extractor import RDSExtractor
+from extractors.rt_extractor import RTExtractor
+from extractors.tgw_extractor import TGWExtractor
+from extractors.vpn_extractor import VPNExtractor
+from extractors.eip_extractor import EIPExtractor
+from extractors.peering_extractor import PeeringExtractor
+
 from generators.bedrock_generator import BedrockGenerator
 from models.infra_model import InfrastructureData
+from extractors.elb_extractor import ELBExtractor
+
 
 
 class InfraOrchestrator:
@@ -25,6 +33,17 @@ class InfraOrchestrator:
             "Security Groups": lambda: SGExtractor(self.region_name).extract_security_groups(),
             "EC2 Instances": lambda: EC2Extractor(self.region_name).extract_instances(),
             "RDS Instances": lambda: RDSExtractor(self.region_name).extract_rds_instances(),
+            "Route Tables": lambda: RTExtractor(self.region_name).extract_route_tables(),
+            "Load Balancers": lambda: ELBExtractor(self.region_name).extract_load_balancers(),
+            "Target Groups": lambda: ELBExtractor(self.region_name).extract_target_groups(),
+            "Transit Gateways": lambda: TGWExtractor(self.region_name).extract_transit_gateways(),
+            "VPN Gateways": lambda: VPNExtractor(self.region_name).extract_vpn_gateways(),
+            "Customer Gateways": lambda: VPNExtractor(self.region_name).extract_customer_gateways(),
+            "VPN Connections": lambda: VPNExtractor(self.region_name).extract_vpn_connections(),
+            "Elastic IPs": lambda: EIPExtractor(self.region_name).extract_elastic_ips(),
+            "VPC Peerings": lambda: PeeringExtractor(self.region_name).extract_vpc_peerings(),
+
+
         }
 
         results = {}
@@ -43,6 +62,17 @@ class InfraOrchestrator:
             security_groups=results["Security Groups"],
             instances=results["EC2 Instances"],
             rds_instances=results["RDS Instances"],
+            route_tables=results["Route Tables"],
+            load_balancers=results["Load Balancers"],
+            target_groups=results["Target Groups"],
+            transit_gateways=results["Transit Gateways"],
+            vpn_gateways=results["VPN Gateways"],
+            customer_gateways=results["Customer Gateways"],
+            vpn_connections=results["VPN Connections"],
+            elastic_ips=results["Elastic IPs"],
+            vpc_peerings=results["VPC Peerings"],
+
+            
         )
 
     def export_to_json(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
@@ -58,6 +88,16 @@ class InfraOrchestrator:
             "security_groups": "Security Groups",
             "instances": "EC2 Instances",
             "rds_instances": "RDS Instances",
+            "route_tables": "Route Tables",
+            "load_balancers": "Load Balancers",
+            "target_groups": "Target Groups",
+            "transit_gateways": "Transit Gateways",
+            "vpn_gateways": "VPN Gateways",
+            "customer_gateways": "Customer Gateways",
+            "vpn_connections": "VPN Connections",
+            "elastic_ips": "Elastic IPs",
+            "vpc_peerings": "VPC Peerings",
+
         }
 
         for key, label in resource_labels.items():

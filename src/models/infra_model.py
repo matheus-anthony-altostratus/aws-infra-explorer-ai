@@ -87,3 +87,9 @@ class InfrastructureData:
     security_groups: List[SecurityGroup] = field(default_factory=list)
     instances: List[Instance] = field(default_factory=list)
     rds_instances: List[RDSInstance] = field(default_factory=list)
+
+@dataclass
+class GeneratedReport:
+    documentation: str = ""
+    diagram: str = ""
+    suggestions: str = ""

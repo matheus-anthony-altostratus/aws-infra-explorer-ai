@@ -8,6 +8,7 @@ from extractors.natgw_extractor import NATGWExtractor
 from extractors.sg_extractor import SGExtractor
 from extractors.ec2_extractor import EC2Extractor
 from extractors.rds_extractor import RDSExtractor
+from generators.bedrock_generator import BedrockGenerator
 from models.infra_model import InfrastructureData
 
 
@@ -17,23 +18,33 @@ class InfraOrchestrator:
         self.region_name = region_name
 
     def collect(self) -> InfrastructureData:
-        vpc_extractor = VPCExtractor(region_name=self.region_name)
-        igw_extractor = IGWExtractor(region_name=self.region_name)
-        natgw_extractor = NATGWExtractor(region_name=self.region_name)
-        sg_extractor = SGExtractor(region_name=self.region_name)
-        ec2_extractor = EC2Extractor(region_name=self.region_name)
-        rds_extractor = RDSExtractor(region_name=self.region_name)
+        extractors = {
+            "VPCs": lambda: VPCExtractor(self.region_name).extract_vpcs(),
+            "Internet Gateways": lambda: IGWExtractor(self.region_name).extract_igws(),
+            "NAT Gateways": lambda: NATGWExtractor(self.region_name).extract_natgws(),
+            "Security Groups": lambda: SGExtractor(self.region_name).extract_security_groups(),
+            "EC2 Instances": lambda: EC2Extractor(self.region_name).extract_instances(),
+            "RDS Instances": lambda: RDSExtractor(self.region_name).extract_rds_instances(),
+        }
+
+        results = {}
+        for name, extract_fn in extractors.items():
+            try:
+                results[name] = extract_fn()
+            except Exception as e:
+                print(f"  Advertencia: No se pudo extraer {name}: {e}")
+                results[name] = []
 
         return InfrastructureData(
             region=self.region_name,
-            vpcs=vpc_extractor.extract_vpcs(),
-            internet_gateways=igw_extractor.extract_igws(),
-            nat_gateways=natgw_extractor.extract_natgws(),
-            security_groups=sg_extractor.extract_security_groups(),
-            instances=ec2_extractor.extract_instances(),
-            rds_instances=rds_extractor.extract_rds_instances(),
+            vpcs=results["VPCs"],
+            internet_gateways=results["Internet Gateways"],
+            nat_gateways=results["NAT Gateways"],
+            security_groups=results["Security Groups"],
+            instances=results["EC2 Instances"],
+            rds_instances=results["RDS Instances"],
         )
-    
+
     def export_to_json(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"infra_{infra.region}.json")
@@ -58,3 +69,21 @@ class InfraOrchestrator:
 
         return output_path
 
+    def generate_reports(self, infra: InfrastructureData) -> dict:
+        generator = BedrockGenerator(region_name=self.region_name)
+        report = generator.generate_report(infra)
+        paths = generator.export_report(report, infra.region)
+        return paths
+
+    def run(self, output_dir: str = "outputs") -> dict:
+        print(f"\nExtrayendo infraestructura de la región {self.region_name}...")
+        infra = self.collect()
+        infra_path = self.export_to_json(infra, output_dir)
+
+        print("Generando reportes con Amazon Bedrock...")
+        report_paths = self.generate_reports(infra)
+
+        return {
+            "infra_json": infra_path,
+            **report_paths,
+        }

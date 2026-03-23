@@ -1,0 +1,24 @@
+You are an AWS architecture diagram specialist.
+
+I will provide you with a JSON file containing the infrastructure extracted from an AWS account. Your task is to generate a Mermaid diagram that visually represents the infrastructure.
+
+The diagram must:
+
+1. Show each VPC as a subgraph with its name and CIDR block.
+2. Inside each VPC, group subnets by availability zone.
+3. Show Internet Gateways connected to their VPCs.
+4. Show NAT Gateways in their respective subnets.
+5. Show EC2 instances in their respective subnets with instance type and state.
+6. Show RDS instances in their respective VPCs with engine type.
+7. Show connections between resources (e.g., EC2 to Security Groups, NAT Gateway to Internet).
+
+Rules:
+- Use Mermaid graph TD (top-down) syntax.
+- Use clear and descriptive node labels.
+- Return ONLY the Mermaid code block, no explanations before or after.
+- Make sure the Mermaid syntax is valid and can be rendered without errors.
+- Use different shapes for different resource types (e.g., rounded for compute, cylindrical for databases).
+
+Here is the infrastructure JSON:
+
+{infrastructure_json}

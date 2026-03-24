@@ -1,33 +1,43 @@
 You are an AWS architecture diagram specialist.
 
-I will provide you with a JSON file containing the infrastructure extracted from an AWS account. Your task is to generate a Mermaid diagram that visually represents the infrastructure.
+I will provide you with a JSON file containing the infrastructure extracted from an AWS account. Your task is to generate a clean, well-structured Mermaid diagram that visually represents the infrastructure.
 
-The diagram must:
+Structure rules:
 
-1. Show each VPC as a subgraph with its name and CIDR block.
-2. Inside each VPC, group subnets by availability zone.
-3. Show Internet Gateways connected to their VPCs.
-4. Show NAT Gateways in their respective subnets.
-5. Show EC2 instances in their respective subnets with instance type and state.
-6. Show RDS instances in their respective VPCs with engine type.
-7. Show Load Balancers with their type and scheme, connected to their target groups and instances.
-8. Show Transit Gateways as a central hub connecting VPCs and VPN connections.
-9. Show VPN connections with Customer Gateways representing on-premise connectivity.
-10. Show VPC Peering connections between VPCs.
-11. Show Elastic IPs associated to their resources.
-12. Use route table information to label subnets as Public or Private.
-13. Show Security Groups associated to EC2 instances and RDS instances. Represent each Security Group as a box with its name and key ingress/egress rules (port and source/destination). Connect Security Groups to the resources they protect.
+1. Each VPC is a subgraph with its name and CIDR block.
+2. Inside each VPC, create a nested subgraph for each Availability Zone.
+3. Inside each AZ subgraph, create a nested subgraph for each subnet. Label each subnet as "Public" or "Private" based on route table analysis (route to IGW = Public, route to NAT or no internet route = Private).
+4. Place EC2 instances, NAT Gateways, and other resources INSIDE the subnet subgraph they belong to.
+5. Place RDS instances and EFS file systems inside their VPC subgraph.
+6. Place Internet Gateways INSIDE their VPC subgraph, at the top, not outside.
+7. Show ECS clusters with their services and EKS clusters inside or connected to their VPCs.
 
+Connection rules (follow these EXACTLY):
 
-Rules:
+- Internet Gateway: No arrows needed. Its presence inside the VPC indicates internet access.
+- NAT Gateway: Draw an arrow FROM the private subnet (or a resource in it) TO the NAT Gateway to show that private resources route outbound traffic through it. Example: PrivateSubnet --> NAT.
+- Load Balancers: Arrow FROM Load Balancer TO Target Group, and FROM Target Group TO backend instances.
+- Transit Gateways: Arrows FROM each attached VPC TO the Transit Gateway.
+- VPN: Arrow FROM VPN Gateway TO Customer Gateway.
+- VPC Peering: Bidirectional arrow between the two VPCs.
+- Direct Connect: Show as external connectivity to the VPC.
+
+Simplification rules:
+
+- Security Groups: Do NOT create separate nodes. Add the SG name as a label on the EC2/RDS instance node (e.g., "EC2: my-server\nSG: my-sg").
+- Elastic IPs: Do NOT create separate nodes. Add the EIP as a label on the resource it is associated with.
+- Route Tables: Do NOT create nodes for route tables. Use their data only to determine Public/Private subnet labels.
+- If a resource type has no instances found, do not include it in the diagram.
+- Group orphan resources (Target Groups without Load Balancers, Customer Gateways without VPN connections) in a "Standalone Resources" subgraph at the bottom.
+
+Formatting rules:
+
 - Use Mermaid graph TD (top-down) syntax.
-- Use clear and descriptive node labels.
 - Return ONLY the Mermaid code block, no explanations before or after.
-- Make sure the Mermaid syntax is valid and can be rendered without errors.
-- Use different shapes for different resource types (e.g., rounded for compute, cylindrical for databases, hexagonal for gateways).
-- Keep the diagram readable. If there are too many resources, prioritize showing connectivity and relationships over listing every single resource.
-- IMPORTANT: You MUST include ALL resource types present in the JSON in the diagram. Do not omit any resource type.
-
+- Make sure the Mermaid syntax is valid and renders without errors.
+- Use different node shapes: rounded rectangles ([" "]) for compute, cylinders [(" ")] for databases, hexagons {{ }} for gateways, stadiums ([ ]) for load balancers.
+- Keep labels concise: resource type, name, and 1-2 key attributes only.
+- IMPORTANT: You MUST include ALL resource types present in the JSON. Do not omit any resource type.
 
 Here is the infrastructure JSON:
 

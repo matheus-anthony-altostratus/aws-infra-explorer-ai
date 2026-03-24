@@ -13,6 +13,10 @@ from extractors.tgw_extractor import TGWExtractor
 from extractors.vpn_extractor import VPNExtractor
 from extractors.eip_extractor import EIPExtractor
 from extractors.peering_extractor import PeeringExtractor
+from extractors.dx_extractor import DXExtractor
+from extractors.ecs_extractor import ECSExtractor
+from extractors.efs_extractor import EFSExtractor
+from extractors.eks_extractor import EKSExtractor
 
 from generators.bedrock_generator import BedrockGenerator
 from models.infra_model import InfrastructureData
@@ -42,6 +46,10 @@ class InfraOrchestrator:
             "VPN Connections": lambda: VPNExtractor(self.region_name).extract_vpn_connections(),
             "Elastic IPs": lambda: EIPExtractor(self.region_name).extract_elastic_ips(),
             "VPC Peerings": lambda: PeeringExtractor(self.region_name).extract_vpc_peerings(),
+            "Direct Connect": lambda: DXExtractor(self.region_name).extract_connections(),
+            "ECS Clusters": lambda: ECSExtractor(self.region_name).extract_ecs_clusters(),
+            "EFS File Systems": lambda: EFSExtractor(self.region_name).extract_file_systems(),
+            "EKS Clusters": lambda: EKSExtractor(self.region_name).extract_eks_clusters(),
 
 
         }
@@ -71,6 +79,10 @@ class InfraOrchestrator:
             vpn_connections=results["VPN Connections"],
             elastic_ips=results["Elastic IPs"],
             vpc_peerings=results["VPC Peerings"],
+            direct_connect_connections=results["Direct Connect"],
+            ecs_clusters=results["ECS Clusters"],
+            efs_file_systems=results["EFS File Systems"],
+            eks_clusters=results["EKS Clusters"],
 
             
         )
@@ -97,6 +109,10 @@ class InfraOrchestrator:
             "vpn_connections": "VPN Connections",
             "elastic_ips": "Elastic IPs",
             "vpc_peerings": "VPC Peerings",
+            "direct_connect_connections": "Direct Connect Connections",
+            "ecs_clusters": "ECS Clusters",
+            "efs_file_systems": "EFS File Systems",
+            "eks_clusters": "EKS Clusters",
 
         }
 

@@ -179,6 +179,46 @@ class VPCPeering(CloudResource):
     accepter_cidr: str = ""
     state: str = ""
 
+@dataclass
+class DirectConnectConnection(CloudResource):
+    bandwidth: str = ""
+    location: str = ""
+    state: str = ""
+    vlan: int = 0
+
+@dataclass
+class ECSService:
+    service_name: str = ""
+    status: str = ""
+    desired_count: int = 0
+    running_count: int = 0
+    launch_type: str = ""
+    task_definition: str = ""
+
+@dataclass
+class ECSCluster(CloudResource):
+    status: str = ""
+    registered_instances: int = 0
+    running_tasks: int = 0
+    pending_tasks: int = 0
+    services: List[ECSService] = field(default_factory=list)
+
+@dataclass
+class EFSFileSystem(CloudResource):
+    size_bytes: int = 0
+    performance_mode: str = ""
+    lifecycle_state: str = ""
+    encrypted: bool = False
+
+@dataclass
+class EKSCluster(CloudResource):
+    version: str = ""
+    status: str = ""
+    endpoint: str = ""
+    vpc_id: str = ""
+    subnet_ids: List[str] = field(default_factory=list)
+    security_groups: List[str] = field(default_factory=list)
+
 
 @dataclass
 class InfrastructureData:
@@ -198,6 +238,11 @@ class InfrastructureData:
     vpn_connections: List[VPNConnection] = field(default_factory=list)
     elastic_ips: List[ElasticIP] = field(default_factory=list)
     vpc_peerings: List[VPCPeering] = field(default_factory=list)
+    direct_connect_connections: List[DirectConnectConnection] = field(default_factory=list)
+    ecs_clusters: List[ECSCluster] = field(default_factory=list)
+    efs_file_systems: List[EFSFileSystem] = field(default_factory=list)
+    eks_clusters: List[EKSCluster] = field(default_factory=list)
+
 
 @dataclass
 class GeneratedReport:

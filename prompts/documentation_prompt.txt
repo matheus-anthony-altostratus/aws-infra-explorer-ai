@@ -12,6 +12,9 @@ The document must include:
 6. **Database Resources**: Description of RDS instances, engines, versions, availability zones, and Multi-AZ configuration.
 7. **Public IP Addresses**: Summary of Elastic IPs, their associations (EC2, NAT Gateway, etc.), and identification of unassociated IPs.
 8. **Security Overview**: Summary of security groups and their rules, highlighting any overly permissive rules (e.g., 0.0.0.0/0 on sensitive ports).
+9. **Containers**: Description of ECS clusters (status, running tasks, services with launch type and task definitions) and EKS clusters (version, status, VPC/subnet placement).
+10. **Storage**: Description of EFS file systems, performance mode, encryption status, and size.
+11. **Connectivity**: Description of Direct Connect connections, bandwidth, location, and state.
 
 Rules:
 - Write in Spanish.

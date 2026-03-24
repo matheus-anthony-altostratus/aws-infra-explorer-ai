@@ -22,6 +22,10 @@ Rules:
 - Check for unassociated Elastic IPs (they generate cost when not in use).
 - Evaluate Transit Gateway and VPN configurations for redundancy and best practices.
 - IMPORTANT: You MUST cover ALL resource types present in the JSON. Do not skip any section. If the response is too long, summarize each section but never omit one entirely.
+- Evaluate ECS clusters for Fargate vs EC2 launch type optimization and service scaling configuration.
+- Evaluate EKS clusters for version currency, VPC/subnet placement, and security group configuration.
+- Check EFS file systems for encryption, performance mode selection, and lifecycle policies.
+- Analyze Direct Connect connections for redundancy and bandwidth adequacy.
 
 
 Here is the infrastructure JSON:

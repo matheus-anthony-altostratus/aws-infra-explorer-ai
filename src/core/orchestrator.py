@@ -21,6 +21,7 @@ from extractors.eks_extractor import EKSExtractor
 from generators.bedrock_generator import BedrockGenerator
 from models.infra_model import InfrastructureData
 from extractors.elb_extractor import ELBExtractor
+from generators.drawio_generator import DrawioGenerator
 
 
 
@@ -50,7 +51,6 @@ class InfraOrchestrator:
             "ECS Clusters": lambda: ECSExtractor(self.region_name).extract_ecs_clusters(),
             "EFS File Systems": lambda: EFSExtractor(self.region_name).extract_file_systems(),
             "EKS Clusters": lambda: EKSExtractor(self.region_name).extract_eks_clusters(),
-
 
         }
 
@@ -131,6 +131,19 @@ class InfraOrchestrator:
         paths = generator.export_report(report, infra.region)
         return paths
 
+    def generate_drawio(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
+        print("Generando diagrama draw.io...")
+        generator = DrawioGenerator()
+        xml_content = generator.generate(infra)
+
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"diagram_{infra.region}.drawio")
+        with open(output_path, "w") as f:
+            f.write(xml_content)
+
+        return output_path
+
+
     def run(self, output_dir: str = "outputs") -> dict:
         print(f"\nExtrayendo infraestructura de la región {self.region_name}...")
         infra = self.collect()
@@ -139,7 +152,11 @@ class InfraOrchestrator:
         print("Generando reportes con Amazon Bedrock...")
         report_paths = self.generate_reports(infra)
 
+        drawio_path = self.generate_drawio(infra, output_dir)
+
         return {
             "infra_json": infra_path,
             **report_paths,
+            "drawio_diagram": drawio_path,
         }
+

@@ -45,7 +45,6 @@ class BedrockGenerator:
 
         tasks = {
             "documentation": ("Generando documentación técnica...", "documentation_prompt.txt"),
-            "diagram": ("Generando diagrama Mermaid...", "diagram_prompt.txt"),
             "suggestions": ("Generando sugerencias de mejora...", "suggestions_prompt.txt"),
         }
 
@@ -62,18 +61,12 @@ class BedrockGenerator:
 
     def export_report(self, report: GeneratedReport, region: str, output_dir: str = "outputs") -> dict:
         os.makedirs(output_dir, exist_ok=True)
-
         paths = {}
 
         doc_path = os.path.join(output_dir, f"documentation_{region}.md")
         with open(doc_path, "w") as f:
             f.write(report.documentation)
         paths["documentation"] = doc_path
-
-        diagram_path = os.path.join(output_dir, f"diagram_{region}.md")
-        with open(diagram_path, "w") as f:
-            f.write(report.diagram)
-        paths["diagram"] = diagram_path
 
         suggestions_path = os.path.join(output_dir, f"suggestions_{region}.md")
         with open(suggestions_path, "w") as f:

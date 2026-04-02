@@ -247,5 +247,4 @@ class InfrastructureData:
 @dataclass
 class GeneratedReport:
     documentation: str = ""
-    diagram: str = ""
     suggestions: str = ""

@@ -1,11 +1,10 @@
-import boto3
 from models.infra_model import DirectConnectConnection
 
 
 class DXExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.dx_client = boto3.client('directconnect', region_name=region_name)
+    def __init__(self, session):
+        self.dx_client = session.get_client('directconnect')
 
     def extract_connections(self) -> list[DirectConnectConnection]:
         response = self.dx_client.describe_connections()

@@ -1,15 +1,16 @@
 import argparse
+from core.session_manager import SessionManager
 from core.orchestrator import InfraOrchestrator
 
 
 def main():
-
     parser = argparse.ArgumentParser(description="AWS Infra Explorer AI")
     parser.add_argument("--region", default="eu-west-1", help="AWS region to analyze (default: eu-west-1)")
     args = parser.parse_args()
 
     try:
-        orchestrator = InfraOrchestrator(region_name=args.region)
+        session = SessionManager(region_name=args.region)
+        orchestrator = InfraOrchestrator(session=session)
         results = orchestrator.run()
 
         print(f"\nProceso completado. Archivos generados:")

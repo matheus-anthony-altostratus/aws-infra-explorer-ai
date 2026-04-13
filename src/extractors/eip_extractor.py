@@ -1,11 +1,10 @@
-import boto3
 from models.infra_model import ElasticIP
 
 
 class EIPExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.ec2_client = boto3.client('ec2', region_name=region_name)
+    def __init__(self, session):
+        self.ec2_client = session.get_client('ec2')
 
     def extract_elastic_ips(self) -> list[ElasticIP]:
         response = self.ec2_client.describe_addresses()

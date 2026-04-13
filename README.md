@@ -112,14 +112,69 @@ aws-infra-explorer-ai
 
 ## Project Phases
 
-| Nº|----Phase-------------------------------------------------------------------------------------|---Status-----|
-| 1 |	Infrastructure extraction with boto3 (VPC, EC2, RDS, SG, IGW, NAT GW)	                       | ✅ Completed |
-| 2 | Amazon Bedrock integration (documentation, diagrams, suggestions)	                           | ✅ Completed |
-| 3 | Validation and configuration (error handling, argparse, README)	                             | ✅ Completed |
-| 4 | Expanded services (Route Tables, ELB, TGW, VPN, EIPs, Peering, DX, ECS, EFS, EKS)	           | ✅ Completed |
-| 5 | Prompt optimization (report quality and completeness)	                                       | ✅ Completed |
-| 6 | draw.io diagram generation (programmatic XML with AWS icons)	                               | ✅ Completed |
-| 7 | Streamlit web interface	                                                                     | ⬜ Pending   |
-| 8 | Opciones Multicuenta                                                                         | ⬜ Pending   |
-| 9 |                                                                        | ⬜ Pending   |
-| 10|                                                                          | ⬜ Pending   |
+| Nº |----Phase-------------------------------------------------------------------------------------|---Status-----|
+| 1  |	Infrastructure extraction with boto3 (VPC, EC2, RDS, SG, IGW, NAT GW)	                       | ✅ Completed |
+| 2  | Amazon Bedrock integration (documentation, diagrams, suggestions)	                           | ✅ Completed |
+| 3  | Validation and configuration (error handling, argparse, README)	                             | ✅ Completed |
+| 4  | Expanded services (Route Tables, ELB, TGW, VPN, EIPs, Peering, DX, ECS, EFS, EKS)	           | ✅ Completed |
+| 5  | Prompt optimization (report quality and completeness)	                                       | ✅ Completed |
+| 6  | draw.io diagram generation (programmatic XML with AWS icons)	                                 | ✅ Completed |
+| 7  |	Refactor core: sesión boto3 inyectable + paginación	                                           ✅ Pendiente
+| 8  |	Interfaz web (FastAPI + Jinja2)	                                                             ⬜ Pendiente
+| 9  |	Soporte AssumeRole + multicuenta	                                                               ⬜ Pendiente
+| 10 |	Historial de análisis + gestión de clientes	                                                   ⬜ Pendiente
+| 11 |                                                                       
+| 12 |                                                                          
+
+┌──────────────────────────────────────────────────────────┐
+│  🔍 AWS Infra Explorer AI                    Altostratus │
+│                                                          │
+│  ┌─ Conexión AWS ─────────────────────────────────────┐  │
+│  │                                                     │  │
+│  │  AWS Access Key ID      [____________________]     │  │
+│  │  AWS Secret Access Key  [____________________]     │  │
+│  │  Región                 [eu-west-1         ▼]     │  │
+│  │                                                     │  │
+│  │  ⚠️ Las credenciales se usan solo en memoria        │  │
+│  │  y no se almacenan en ningún momento.               │  │
+│  │                                                     │  │
+│  │           [ 🚀 Analizar Infraestructura ]           │  │
+│  └─────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────┐
+│  🔍 AWS Infra Explorer AI                    Altostratus │
+│                                                          │
+│  Analizando infraestructura en eu-west-1...              │
+│                                                          │
+│  ✅ VPCs                    ✅ Security Groups            │
+│  ✅ Internet Gateways       ✅ EC2 Instances              │
+│  ✅ NAT Gateways            ⏳ RDS Instances              │
+│  ⬜ Route Tables            ⬜ Load Balancers             │
+│  ...                                                     │
+│                                                          │
+│  ████████████░░░░░░░░  60%                               │
+└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│  🔍 AWS Infra Explorer AI                    Altostratus │
+│                                                          │
+│  ✅ Análisis completado — eu-west-1                      │
+│  Recursos encontrados: 2 VPCs, 8 Subnets, 2 EC2...      │
+│                                                          │
+│  ┌─ 📄 Documentación ─┬─ 💡 Sugerencias ──────────────┐ │
+│  │                     │                                │ │
+│  │  (contenido del .md renderizado como HTML)          │ │
+│  │                                                      │ │
+│  └──────────────────────────────────────────────────────┘ │
+│                                                          │
+│  ── Descargas ───────────────────────────────────────    │
+│  [📥 JSON] [📥 Documentación] [📥 Sugerencias] [📥 draw.io] │
+│                                                          │
+│  ── Diagrama de Arquitectura ────────────────────────    │
+│  ℹ️ Para visualizar el diagrama:                         │
+│  1. Descarga el archivo .drawio                          │
+│  2. Abre app.diagrams.net en otra pestaña                │
+│  3. Arrastra el archivo o usa Archivo > Abrir            │
+│                                                          │
+│  [ 🔄 Nuevo Análisis ]                                   │
+└──────────────────────────────────────────────────────────┘

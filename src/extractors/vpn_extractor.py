@@ -1,11 +1,10 @@
-import boto3
 from models.infra_model import VPNGateway, CustomerGateway, VPNConnection
 
 
 class VPNExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.ec2_client = boto3.client('ec2', region_name=region_name)
+    def __init__(self, session):
+        self.ec2_client = session.get_client('ec2')
 
     def extract_vpn_gateways(self) -> list[VPNGateway]:
         response = self.ec2_client.describe_vpn_gateways()
@@ -14,9 +13,8 @@ class VPNExtractor:
         for vgw_data in response["VpnGateways"]:
             tags = {tag["Key"]: tag["Value"] for tag in vgw_data.get("Tags", [])}
 
-            attachments = vgw_data.get("VpcAttachments", [])
             vpc_id = ""
-            for att in attachments:
+            for att in vgw_data.get("VpcAttachments", []):
                 if att.get("State") == "attached":
                     vpc_id = att["VpcId"]
                     break

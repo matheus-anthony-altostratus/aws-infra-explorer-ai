@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import asdict
 
+from core.session_manager import SessionManager
 from extractors.vpc_extractor import VPCExtractor
 from extractors.igw_extractor import IGWExtractor
 from extractors.natgw_extractor import NATGWExtractor
@@ -17,41 +18,39 @@ from extractors.dx_extractor import DXExtractor
 from extractors.ecs_extractor import ECSExtractor
 from extractors.efs_extractor import EFSExtractor
 from extractors.eks_extractor import EKSExtractor
-
-from generators.bedrock_generator import BedrockGenerator
-from models.infra_model import InfrastructureData
 from extractors.elb_extractor import ELBExtractor
+from generators.bedrock_generator import BedrockGenerator
 from generators.drawio_generator import DrawioGenerator
-
+from models.infra_model import InfrastructureData
 
 
 class InfraOrchestrator:
 
-    def __init__(self, region_name: str):
-        self.region_name = region_name
+    def __init__(self, session: SessionManager):
+        self.session = session
+        self.region_name = session.region_name
 
     def collect(self) -> InfrastructureData:
         extractors = {
-            "VPCs": lambda: VPCExtractor(self.region_name).extract_vpcs(),
-            "Internet Gateways": lambda: IGWExtractor(self.region_name).extract_igws(),
-            "NAT Gateways": lambda: NATGWExtractor(self.region_name).extract_natgws(),
-            "Security Groups": lambda: SGExtractor(self.region_name).extract_security_groups(),
-            "EC2 Instances": lambda: EC2Extractor(self.region_name).extract_instances(),
-            "RDS Instances": lambda: RDSExtractor(self.region_name).extract_rds_instances(),
-            "Route Tables": lambda: RTExtractor(self.region_name).extract_route_tables(),
-            "Load Balancers": lambda: ELBExtractor(self.region_name).extract_load_balancers(),
-            "Target Groups": lambda: ELBExtractor(self.region_name).extract_target_groups(),
-            "Transit Gateways": lambda: TGWExtractor(self.region_name).extract_transit_gateways(),
-            "VPN Gateways": lambda: VPNExtractor(self.region_name).extract_vpn_gateways(),
-            "Customer Gateways": lambda: VPNExtractor(self.region_name).extract_customer_gateways(),
-            "VPN Connections": lambda: VPNExtractor(self.region_name).extract_vpn_connections(),
-            "Elastic IPs": lambda: EIPExtractor(self.region_name).extract_elastic_ips(),
-            "VPC Peerings": lambda: PeeringExtractor(self.region_name).extract_vpc_peerings(),
-            "Direct Connect": lambda: DXExtractor(self.region_name).extract_connections(),
-            "ECS Clusters": lambda: ECSExtractor(self.region_name).extract_ecs_clusters(),
-            "EFS File Systems": lambda: EFSExtractor(self.region_name).extract_file_systems(),
-            "EKS Clusters": lambda: EKSExtractor(self.region_name).extract_eks_clusters(),
-
+            "VPCs": lambda: VPCExtractor(self.session).extract_vpcs(),
+            "Internet Gateways": lambda: IGWExtractor(self.session).extract_igws(),
+            "NAT Gateways": lambda: NATGWExtractor(self.session).extract_natgws(),
+            "Security Groups": lambda: SGExtractor(self.session).extract_security_groups(),
+            "EC2 Instances": lambda: EC2Extractor(self.session).extract_instances(),
+            "RDS Instances": lambda: RDSExtractor(self.session).extract_rds_instances(),
+            "Route Tables": lambda: RTExtractor(self.session).extract_route_tables(),
+            "Load Balancers": lambda: ELBExtractor(self.session).extract_load_balancers(),
+            "Target Groups": lambda: ELBExtractor(self.session).extract_target_groups(),
+            "Transit Gateways": lambda: TGWExtractor(self.session).extract_transit_gateways(),
+            "VPN Gateways": lambda: VPNExtractor(self.session).extract_vpn_gateways(),
+            "Customer Gateways": lambda: VPNExtractor(self.session).extract_customer_gateways(),
+            "VPN Connections": lambda: VPNExtractor(self.session).extract_vpn_connections(),
+            "Elastic IPs": lambda: EIPExtractor(self.session).extract_elastic_ips(),
+            "VPC Peerings": lambda: PeeringExtractor(self.session).extract_vpc_peerings(),
+            "Direct Connect": lambda: DXExtractor(self.session).extract_connections(),
+            "ECS Clusters": lambda: ECSExtractor(self.session).extract_ecs_clusters(),
+            "EFS File Systems": lambda: EFSExtractor(self.session).extract_file_systems(),
+            "EKS Clusters": lambda: EKSExtractor(self.session).extract_eks_clusters(),
         }
 
         results = {}
@@ -83,8 +82,6 @@ class InfraOrchestrator:
             ecs_clusters=results["ECS Clusters"],
             efs_file_systems=results["EFS File Systems"],
             eks_clusters=results["EKS Clusters"],
-
-            
         )
 
     def export_to_json(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
@@ -113,7 +110,6 @@ class InfraOrchestrator:
             "ecs_clusters": "ECS Clusters",
             "efs_file_systems": "EFS File Systems",
             "eks_clusters": "EKS Clusters",
-
         }
 
         for key, label in resource_labels.items():
@@ -143,7 +139,6 @@ class InfraOrchestrator:
 
         return output_path
 
-
     def run(self, output_dir: str = "outputs") -> dict:
         print(f"\nExtrayendo infraestructura de la región {self.region_name}...")
         infra = self.collect()
@@ -159,4 +154,3 @@ class InfraOrchestrator:
             **report_paths,
             "drawio_diagram": drawio_path,
         }
-

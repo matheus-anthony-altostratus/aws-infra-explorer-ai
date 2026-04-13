@@ -1,14 +1,17 @@
-import boto3
 from models.infra_model import ECSCluster, ECSService
 
 
 class ECSExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.ecs_client = boto3.client('ecs', region_name=region_name)
+    def __init__(self, session):
+        self.ecs_client = session.get_client('ecs')
 
     def extract_ecs_clusters(self) -> list[ECSCluster]:
-        cluster_arns = self.ecs_client.list_clusters()["clusterArns"]
+        paginator = self.ecs_client.get_paginator('list_clusters')
+        cluster_arns = []
+        for page in paginator.paginate():
+            cluster_arns.extend(page["clusterArns"])
+
         if not cluster_arns:
             return []
 
@@ -18,8 +21,6 @@ class ECSExtractor:
         for c in response["clusters"]:
             tags = {tag["key"]: tag["value"] for tag in c.get("tags", [])}
 
-            services = self._extract_services(c["clusterArn"])
-
             cluster = ECSCluster(
                 resource_id=c.get("clusterArn", ""),
                 name=c.get("clusterName"),
@@ -28,14 +29,18 @@ class ECSExtractor:
                 registered_instances=c.get("registeredContainerInstancesCount", 0),
                 running_tasks=c.get("runningTasksCount", 0),
                 pending_tasks=c.get("pendingTasksCount", 0),
-                services=services,
+                services=self._extract_services(c["clusterArn"]),
             )
             clusters.append(cluster)
 
         return clusters
 
     def _extract_services(self, cluster_arn: str) -> list[ECSService]:
-        service_arns = self.ecs_client.list_services(cluster=cluster_arn)["serviceArns"]
+        paginator = self.ecs_client.get_paginator('list_services')
+        service_arns = []
+        for page in paginator.paginate(cluster=cluster_arn):
+            service_arns.extend(page["serviceArns"])
+
         if not service_arns:
             return []
 

@@ -1,16 +1,18 @@
-import boto3
 from models.infra_model import EKSCluster
 
 
 class EKSExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.eks_client = boto3.client('eks', region_name=region_name)
+    def __init__(self, session):
+        self.eks_client = session.get_client('eks')
 
     def extract_eks_clusters(self) -> list[EKSCluster]:
-        cluster_names = self.eks_client.list_clusters()["clusters"]
-        clusters = []
+        paginator = self.eks_client.get_paginator('list_clusters')
+        cluster_names = []
+        for page in paginator.paginate():
+            cluster_names.extend(page["clusters"])
 
+        clusters = []
         for name in cluster_names:
             response = self.eks_client.describe_cluster(name=name)
             c = response["cluster"]

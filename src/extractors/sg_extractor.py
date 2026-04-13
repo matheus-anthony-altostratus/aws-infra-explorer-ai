@@ -1,39 +1,45 @@
-import boto3
 from models.infra_model import SecurityGroup, SecurityGroupRule
 
 
 class SGExtractor:
 
-    def __init__(self, region_name: str = "us-east-1"):
-        self.ec2_client = boto3.client('ec2', region_name=region_name)
-
-    def _parse_rules(self, rules_data: list) -> list[SecurityGroupRule]:
-        rules = []
-        for rule in rules_data:
-            sg_rule = SecurityGroupRule(
-                protocol=rule.get("IpProtocol", ""),
-                from_port=rule.get("FromPort", -1),
-                to_port=rule.get("ToPort", -1),
-                cidr_blocks=[ip["CidrIp"] for ip in rule.get("IpRanges", [])],
-            )
-            rules.append(sg_rule)
-        return rules
+    def __init__(self, session):
+        self.ec2_client = session.get_client('ec2')
 
     def extract_security_groups(self) -> list[SecurityGroup]:
-        response = self.ec2_client.describe_security_groups()
+        paginator = self.ec2_client.get_paginator('describe_security_groups')
         sgs = []
 
-        for sg_data in response["SecurityGroups"]:
-            tags = {tag["Key"]: tag["Value"] for tag in sg_data.get("Tags", [])}
+        for page in paginator.paginate():
+            for sg_data in page["SecurityGroups"]:
+                tags = {tag["Key"]: tag["Value"] for tag in sg_data.get("Tags", [])}
 
-            sg = SecurityGroup(
-                resource_id=sg_data["GroupId"],
-                name=tags.get("Name", sg_data.get("GroupName", "")),
-                tags=tags,
-                description=sg_data.get("Description"),
-                ingress_rules=self._parse_rules(sg_data.get("IpPermissions", [])),
-                egress_rules=self._parse_rules(sg_data.get("IpPermissionsEgress", [])),
-            )
-            sgs.append(sg)
+                ingress_rules = []
+                for rule in sg_data.get("IpPermissions", []):
+                    ingress_rules.append(SecurityGroupRule(
+                        protocol=rule.get("IpProtocol", ""),
+                        from_port=rule.get("FromPort", -1),
+                        to_port=rule.get("ToPort", -1),
+                        cidr_blocks=[r["CidrIp"] for r in rule.get("IpRanges", [])],
+                    ))
+
+                egress_rules = []
+                for rule in sg_data.get("IpPermissionsEgress", []):
+                    egress_rules.append(SecurityGroupRule(
+                        protocol=rule.get("IpProtocol", ""),
+                        from_port=rule.get("FromPort", -1),
+                        to_port=rule.get("ToPort", -1),
+                        cidr_blocks=[r["CidrIp"] for r in rule.get("IpRanges", [])],
+                    ))
+
+                sg = SecurityGroup(
+                    resource_id=sg_data["GroupId"],
+                    name=sg_data.get("GroupName"),
+                    tags=tags,
+                    description=sg_data.get("Description"),
+                    ingress_rules=ingress_rules,
+                    egress_rules=egress_rules,
+                )
+                sgs.append(sg)
 
         return sgs

@@ -12,6 +12,8 @@ echo "🔄 Invalidando caché de CloudFront..."
 aws cloudfront create-invalidation \
     --distribution-id "$DISTRIBUTION_ID" \
     --paths "/*" \
-    --no-cli-pager
+    --no-cli-pager \
+    --output text \
+    --query 'Invalidation.Status' > /dev/null
 
 echo "✅ Frontend desplegado: https://d2y8h0jbecvclg.cloudfront.net"

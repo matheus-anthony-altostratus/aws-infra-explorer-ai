@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Infra Explorer AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.75rem; color: #f9fafb; }
+        .markdown-body h2 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: #e5e7eb; }
+        .markdown-body h3 { font-size: 1.1rem; font-weight: 600; margin: 1rem 0 0.5rem; color: #d1d5db; }
+        .markdown-body p { margin: 0.5rem 0; color: #d1d5db; }
+        .markdown-body ul { list-style: disc; margin-left: 1.5rem; color: #d1d5db; }
+        .markdown-body ol { list-style: decimal; margin-left: 1.5rem; color: #d1d5db; }
+        .markdown-body li { margin: 0.25rem 0; }
+        .markdown-body table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        .markdown-body th { background: #1f2937; padding: 0.5rem; text-align: left; border: 1px solid #374151; color: #e5e7eb; }
+        .markdown-body td { padding: 0.5rem; border: 1px solid #374151; color: #d1d5db; }
+        .markdown-body code { background: #1f2937; padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #fbbf24; }
+        .markdown-body strong { color: #f9fafb; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">🔍</span>
+                <h1 class="text-xl font-bold text-white">AWS Infra Explorer AI</h1>
+            </div>
+            <span class="text-sm text-gray-400">Altostratus</span>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-6 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-6xl mx-auto px-6 py-4 text-center text-sm text-gray-500">
+            AWS Infra Explorer AI — Altostratus
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,1 +1,17 @@
 boto3
+fastapi
+uvicorn
+jinja2
+markdown
+python-multipart
+
+
+## fastapi — el framework web
+
+## uvicorn — servidor ASGI para correr FastAPI
+
+## jinja2 — motor de templates HTML
+
+## markdown — convierte los .md a HTML para mostrar en la web
+
+## python-multipart — necesario para que FastAPI procese formularios HTML

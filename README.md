@@ -1,180 +1,214 @@
-# aws-infra-explorer-ai
+# AWS Infra Explorer AI
 
-AWS Infra Explorer AI is an internal tool designed to automatically analyze AWS infrastructure and generate clear technical documentation and architecture diagrams.
+Herramienta interna de Altostratus que analiza automáticamente la infraestructura AWS de clientes y genera:
 
-The tool connects to an AWS account using read-only permissions and extracts infrastructure data such as VPCs, EC2 instances, databases, networking, containers, and storage components.
+- Documentación técnica detallada (Markdown, generada con Amazon Bedrock - Claude Sonnet 4)
+- Sugerencias de mejora basadas en AWS Well-Architected Framework
+- Diagramas de arquitectura profesionales (draw.io con iconos AWS)
 
-It generates:
+---
 
-- Technical documentation in Markdown (powered by Amazon Bedrock - Claude Sonnet 4)
-- Architecture diagrams in draw.io format (programmatically generated with AWS icons)
-- Improvement suggestions based on AWS Well-Architected Framework (powered by Amazon Bedrock)
+## Arquitectura
+┌─────────────────────────────────────────────────────────────┐
+│ Ingeniero abre https://d2y8h0jbecvclg.cloudfront.net │
+└──────────────┬──────────────────────────────────────────────┘
+│
+┌──────────────▼──────────────────────────────────────────────┐
+│ CloudFront (CDN + HTTPS) │
+│ ├── /* → S3 Frontend (HTML/CSS/JS) │
+│ └── /analyze, /download → API Gateway → Lambda │
+└──────────────┬──────────────────────────────────────────────┘
+│
+┌──────────────▼──────────────────────────────────────────────┐
+│ Lambda (Python 3.12, 1024MB, 10min timeout) │
+│ ├── STS AssumeRole → cuenta del cliente (ReadOnlyAccess) │
+│ ├── 16 extractores boto3 (VPC, EC2, RDS, ECS, EKS, etc.) │
+│ ├── Amazon Bedrock (Claude Sonnet 4) → doc + sugerencias │
+│ ├── draw.io generator (XML programático) │
+│ └── Upload outputs → S3 (presigned URLs) │
+└─────────────────────────────────────────────────────────────┘
 
-## Project Goals
 
-- Reduce time required to understand client infrastructures
-- Improve onboarding for new engineers
-- Standardize infrastructure documentation
-- Provide automated architecture insights and diagrams
+---
 
-## Status
+## Infraestructura (Terraform)
 
-See [Project Phases](#project-phases) for detailed progress.
+La infraestructura está dividida en dos stacks independientes:
 
-## Prerequisites
+| Stack | Contenido | Frecuencia de cambio |
+|---|---|---|
+| `terraform/persistent/` | S3 buckets + CloudFront | Rara vez (no se destruye) |
+| `terraform/app/` | Lambda + API Gateway + IAM | Frecuente (destroy/apply sin miedo) |
 
-- Python 3.12+
-- AWS account with ReadOnlyAccess
-- IAM policy with `bedrock:InvokeModel` permission (or `AmazonBedrockLimitedAccess` managed policy)
-- [aws-vault](https://github.com/99designs/aws-vault) configured with the target account profile
+### Recursos desplegados
 
-## Setup
+| Recurso | Nombre/URL |
+|---|---|
+| CloudFront | `https://d2y8h0jbecvclg.cloudfront.net` |
+| S3 Frontend | `infra-explorer-frontend-sandbox` |
+| S3 Outputs | `infra-explorer-outputs-sandbox` (lifecycle 30 días) |
+| API Gateway | `https://gdz678r5rl.execute-api.eu-west-1.amazonaws.com` |
+| Lambda | `infra-explorer-analyzer` |
+
+---
+
+## Perfiles AWS
+
+| Perfil | Uso | Permisos |
+|---|---|---|
+| `sandbox` | Terraform + deploy (cuenta sandbox vía cuenta de salto) | cmc_role_admin |
+| `infra-explorer` | Bedrock (solo ejecución local) | Usuario IAM en sandbox |
+
+---
+
+### Requisitos
+
+- Terraform >= 1.5
+- AWS CLI v2
+- aws-vault configurado con perfil `sandbox`
+
+### Infraestructura (solo la primera vez o al cambiar infra)
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd aws-infra-explorer-ai
+# Stack persistente (S3 + CloudFront)
+cd terraform/persistent
+aws-vault exec sandbox -- terraform init
+aws-vault exec sandbox -- terraform apply
 
-# Create and activate virtual environment
-python3.12 -m venv venv
-source venv/bin/activate
+# Stack de aplicación (Lambda + API Gateway + IAM)
+cd terraform/app
+aws-vault exec sandbox -- terraform init
+aws-vault exec sandbox -- terraform apply
 
-# Install dependencies
-pip install -r requirements.txt
 
-Usage
-# Default region (eu-west-1)
-aws-vault exec <profile> -- python3 src/main.py
+Copy
 
-# Custom region
-aws-vault exec <profile> -- python3 src/main.py --region us-east-1
+Insert at cursor
+Deploy Lambda (código backend)
+aws-vault exec sandbox -- ./scripts/deploy_lambda.sh
 
-Supported AWS Services
+Copy
 
-Category	Services
+Insert at cursor
+bash
+Deploy Frontend
+aws-vault exec sandbox -- ./scripts/deploy_frontend.sh
+
+Copy
+
+Insert at cursor
+bash
+Estructura del Proyecto
+aws-infra-explorer-ai/
+│
+├── src/                              # Código fuente
+│   ├── lambda_handler.py             # Entry point Lambda (API Gateway)
+│   ├── core/
+│   │   ├── orchestrator.py           # Coordina extractores y generadores
+│   │   └── session_manager.py        # Gestión de sesiones boto3 (AssumeRole)
+│   ├── extractors/                   # 16 extractores de servicios AWS
+│   ├── generators/
+│   │   ├── bedrock_generator.py      # Documentación + sugerencias con IA
+│   │   └── drawio_generator.py       # Diagramas draw.io (XML)
+│   ├── models/
+│   │   └── infra_model.py            # Dataclasses de recursos AWS
+│   └── web/                          # Interfaz web local (FastAPI, legacy)
+│
+├── frontend/                         # Frontend estático (CloudFront + S3)
+│   ├── index.html
+│   └── app.js
+│
+├── terraform/
+│   ├── persistent/                   # S3 + CloudFront (no se destruye)
+│   └── app/                          # Lambda + API Gateway + IAM
+│
+├── scripts/
+│   ├── deploy_lambda.sh              # Build + deploy del código Lambda
+│   └── deploy_frontend.sh            # Sync frontend a S3 + invalidar cache
+│
+├── prompts/                          # Prompts para Amazon Bedrock
+│   ├── documentation_prompt.txt
+│   └── suggestions_prompt.txt
+│
+└── requirements.txt                  # Dependencias Python (ejecución local)
+
+
+Copy
+
+Insert at cursor
+Servicios AWS Analizados
+Categoría	Servicios
 Networking	VPCs, Subnets, Internet Gateways, NAT Gateways, Route Tables, VPC Peering, Elastic IPs
 Compute	EC2 Instances
 Database	RDS Instances
-Containers	ECS Clusters (with Services), EKS Clusters
+Containers	ECS Clusters (con Services), EKS Clusters
 Storage	EFS File Systems
-Load Balancing	ALB, NLB (with Listeners and Target Groups)
+Load Balancing	ALB, NLB (con Listeners y Target Groups)
 Connectivity	Transit Gateways, VPN (Gateways, Customer Gateways, Connections), Direct Connect
 Security	Security Groups
-AWS Permissions Required
-The IAM user/role needs:
+Seguridad
+Sin credenciales estáticas: la Lambda usa AssumeRole con credenciales temporales (1 hora)
 
-ReadOnlyAccess (AWS managed policy) — for infrastructure extraction
+Nunca se escriben Access Keys: el flujo es exclusivamente AssumeRole
 
-AmazonBedrockLimitedAccess (AWS managed policy) — for AI report generation
+Outputs encriptados: S3 con SSE-S3 (AES256)
 
-## Project Structure
+Lifecycle automático: outputs se eliminan a los 30 días
 
-aws-infra-explorer-ai
-│
-├── src/                              # Main source code
-│   ├── extractors/                   # AWS infrastructure data extractors (boto3)
-│   │   ├── vpc_extractor.py          # VPCs and Subnets
-│   │   ├── igw_extractor.py          # Internet Gateways
-│   │   ├── natgw_extractor.py        # NAT Gateways
-│   │   ├── sg_extractor.py           # Security Groups
-│   │   ├── ec2_extractor.py          # EC2 Instances
-│   │   ├── rds_extractor.py          # RDS Instances
-│   │   ├── rt_extractor.py           # Route Tables
-│   │   ├── elb_extractor.py          # Load Balancers, Listeners, Target Groups
-│   │   ├── tgw_extractor.py          # Transit Gateways, Attachments, Route Tables
-│   │   ├── vpn_extractor.py          # VPN Gateways, Customer Gateways, Connections
-│   │   ├── eip_extractor.py          # Elastic IPs
-│   │   ├── peering_extractor.py      # VPC Peering
-│   │   ├── dx_extractor.py           # Direct Connect
-│   │   ├── ecs_extractor.py          # ECS Clusters and Services
-│   │   ├── efs_extractor.py          # EFS File Systems
-│   │   └── eks_extractor.py          # EKS Clusters
-│   │
-│   ├── generators/                   # Report and diagram generation
-│   │   ├── bedrock_generator.py      # Bedrock client + AI report generation
-│   │   └── drawio_generator.py       # draw.io diagram generation (XML)
-│   │
-│   ├── models/                       # Data models
-│   │   └── infra_model.py            # Dataclasses for all AWS resources
-│   │
-│   ├── core/                         # Orchestration
-│   │   └── orchestrator.py           # Coordinates extractors, generators, and exports
-│   │
-│   └── main.py                       # Entry point (argparse for --region)
-│
-├── prompts/                          # Prompt templates for Amazon Bedrock
-│   ├── documentation_prompt.txt      # Technical documentation prompt
-│   └── suggestions_prompt.txt        # Well-Architected suggestions prompt
-│
-├── outputs/                          # Generated outputs (gitignored)
-├── requirements.txt                  # Python dependencies
-└── README.md                         # Project documentation
+Bucket privado: acceso solo vía presigned URLs generadas por Lambda
 
-## Project Phases
+Sin autenticación web (por ahora): pendiente Cognito para futuro
 
-| Nº |----Phase-------------------------------------------------------------------------------------|---Status-----|
-| 1  |	Infrastructure extraction with boto3 (VPC, EC2, RDS, SG, IGW, NAT GW)	                       | ✅ Completed |
-| 2  | Amazon Bedrock integration (documentation, diagrams, suggestions)	                           | ✅ Completed |
-| 3  | Validation and configuration (error handling, argparse, README)	                             | ✅ Completed |
-| 4  | Expanded services (Route Tables, ELB, TGW, VPN, EIPs, Peering, DX, ECS, EFS, EKS)	           | ✅ Completed |
-| 5  | Prompt optimization (report quality and completeness)	                                       | ✅ Completed |
-| 6  | draw.io diagram generation (programmatic XML with AWS icons)	                                 | ✅ Completed |
-| 7  |	Refactor core: sesión boto3 inyectable + paginación	                                           ✅ Pendiente
-| 8  |	Interfaz web (FastAPI + Jinja2)	                                                             ⬜ Pendiente
-| 9  |	Soporte AssumeRole + multicuenta	                                                               ⬜ Pendiente
-| 10 |	Historial de análisis + gestión de clientes	                                                   ⬜ Pendiente
-| 11 |                                                                       
-| 12 |                                                                          
+Requisitos para el Cliente
+El cliente debe crear un rol IAM en su cuenta:
 
-┌──────────────────────────────────────────────────────────┐
-│  🔍 AWS Infra Explorer AI                    Altostratus │
-│                                                          │
-│  ┌─ Conexión AWS ─────────────────────────────────────┐  │
-│  │                                                     │  │
-│  │  AWS Access Key ID      [____________________]     │  │
-│  │  AWS Secret Access Key  [____________________]     │  │
-│  │  Región                 [eu-west-1         ▼]     │  │
-│  │                                                     │  │
-│  │  ⚠️ Las credenciales se usan solo en memoria        │  │
-│  │  y no se almacenan en ningún momento.               │  │
-│  │                                                     │  │
-│  │           [ 🚀 Analizar Infraestructura ]           │  │
-│  └─────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────┘
+Nombre: infra-explorer-read-only
 
-┌──────────────────────────────────────────────────────────┐
-│  🔍 AWS Infra Explorer AI                    Altostratus │
-│                                                          │
-│  Analizando infraestructura en eu-west-1...              │
-│                                                          │
-│  ✅ VPCs                    ✅ Security Groups            │
-│  ✅ Internet Gateways       ✅ EC2 Instances              │
-│  ✅ NAT Gateways            ⏳ RDS Instances              │
-│  ⬜ Route Tables            ⬜ Load Balancers             │
-│  ...                                                     │
-│                                                          │
-│  ████████████░░░░░░░░  60%                               │
-└──────────────────────────────────────────────────────────┘
-┌──────────────────────────────────────────────────────────┐
-│  🔍 AWS Infra Explorer AI                    Altostratus │
-│                                                          │
-│  ✅ Análisis completado — eu-west-1                      │
-│  Recursos encontrados: 2 VPCs, 8 Subnets, 2 EC2...      │
-│                                                          │
-│  ┌─ 📄 Documentación ─┬─ 💡 Sugerencias ──────────────┐ │
-│  │                     │                                │ │
-│  │  (contenido del .md renderizado como HTML)          │ │
-│  │                                                      │ │
-│  └──────────────────────────────────────────────────────┘ │
-│                                                          │
-│  ── Descargas ───────────────────────────────────────    │
-│  [📥 JSON] [📥 Documentación] [📥 Sugerencias] [📥 draw.io] │
-│                                                          │
-│  ── Diagrama de Arquitectura ────────────────────────    │
-│  ℹ️ Para visualizar el diagrama:                         │
-│  1. Descarga el archivo .drawio                          │
-│  2. Abre app.diagrams.net en otra pestaña                │
-│  3. Arrastra el archivo o usa Archivo > Abrir            │
-│                                                          │
-│  [ 🔄 Nuevo Análisis ]                                   │
-└──────────────────────────────────────────────────────────┘
+Política: ReadOnlyAccess (AWS managed policy)
+
+Trust Policy:
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::590183851235:role/infra-explorer-lambda-role"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+
+Copy
+
+Insert at cursor
+json
+Ejecución Local (legacy)
+El proyecto también puede ejecutarse localmente con FastAPI:
+
+source venv/bin/activate
+aws-vault exec infra-explorer -- uvicorn src.web.app:app --reload --port 8000
+
+Copy
+
+Insert at cursor
+bash
+Roadmap
+Fase	Descripción	Estado
+1	Extracción de infraestructura con boto3	✅
+2	Integración con Amazon Bedrock (Claude Sonnet 4)	✅
+3	Validación y configuración (error handling, argparse)	✅
+4	Servicios expandidos (RT, ELB, TGW, VPN, EIP, DX, ECS, EFS, EKS)	✅
+5	Optimización de prompts	✅
+6	Diagramas draw.io (generación programática con XML)	✅
+7	Refactor: sesión boto3 inyectable + paginación	✅
+8	Interfaz web (FastAPI + Jinja2)	✅
+9	Despliegue serverless (Terraform + Lambda + CloudFront)	✅
+10	Autenticación (Amazon Cognito)	⬜ Pendiente
+11	Historial de análisis + gestión de clientes	⬜ Pendiente
+12	Pestañas en diagrama draw.io (por categoría)	⬜ Pendiente
+13	Dominio personalizado (Route 53 + ACM)	⬜ Pendiente
+
+---

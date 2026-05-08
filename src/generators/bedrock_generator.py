@@ -8,7 +8,20 @@ from models.infra_model import InfrastructureData, GeneratedReport
 class BedrockGenerator:
 
     def __init__(self, region_name: str = "eu-west-1", prompts_dir: str = "prompts"):
-        self.bedrock_client = boto3.client("bedrock-runtime", region_name=region_name)
+        bedrock_key = os.environ.get("BEDROCK_AWS_ACCESS_KEY_ID")
+        bedrock_secret = os.environ.get("BEDROCK_AWS_SECRET_ACCESS_KEY")
+        bedrock_token = os.environ.get("BEDROCK_AWS_SESSION_TOKEN")
+        if bedrock_key and bedrock_secret:
+            self.bedrock_client = boto3.client(
+                "bedrock-runtime",
+                region_name=region_name,
+                aws_access_key_id=bedrock_key,
+                aws_secret_access_key=bedrock_secret,
+                aws_session_token=bedrock_token,
+            )
+        else:
+            self.bedrock_client = boto3.client("bedrock-runtime", region_name=region_name)
+
         self.model_id = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
         self.prompts_dir = prompts_dir
 

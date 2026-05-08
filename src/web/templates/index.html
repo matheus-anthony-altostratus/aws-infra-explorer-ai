@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-lg mx-auto mt-8">
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-8">
+        <h2 class="text-xl font-semibold text-white mb-2">Conexión AWS</h2>
+        <p class="text-gray-400 text-sm mb-6">Selecciona el método de autenticación para la cuenta a analizar.</p>
+
+        {% if error %}
+        <div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg mb-6">
+            <strong>Error:</strong> {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- Tabs -->
+        <div class="flex mb-6 bg-gray-900 rounded-lg p-1">
+            <button type="button" id="tabAssumeRole"
+                class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-blue-600 text-white"
+                onclick="switchTab('assume_role')">
+                🔐 AssumeRole
+            </button>
+            <button type="button" id="tabAccessKeys"
+                class="flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-white"
+                onclick="switchTab('access_keys')">
+                🔑 Access Keys
+            </button>
+        </div>
+
+        <form method="POST" action="/analyze" id="analyzeForm">
+            <input type="hidden" name="auth_mode" id="authMode" value="assume_role">
+
+            <!-- AssumeRole fields -->
+            <div id="assumeRoleFields">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Account ID del cliente</label>
+                    <input type="text" name="account_id" maxlength="12" pattern="\d{12}"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="123456789012">
+                </div>
+                <div class="bg-blue-900/30 border border-blue-700/50 rounded-lg px-4 py-3 mb-6">
+                    <p class="text-blue-300 text-sm">
+                        🔐 Se usará <code class="text-blue-200">sts:AssumeRole</code> al rol
+                        <code class="text-blue-200">cct_role_read_only</code> en la cuenta del cliente.
+                        Credenciales temporales de 1 hora.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Access Keys fields -->
+            <div id="accessKeysFields" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">AWS Access Key ID</label>
+                    <input type="text" name="aws_access_key_id"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="AKIA...">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">AWS Secret Access Key</label>
+                    <input type="password" name="aws_secret_access_key"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="••••••••••••••••">
+                </div>
+                <div class="bg-yellow-900/30 border border-yellow-700/50 rounded-lg px-4 py-3 mb-6">
+                    <p class="text-yellow-300 text-sm">
+                        ⚠️ Las credenciales se usan solo en memoria y no se almacenan en ningún momento.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Region (shared) -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-1">Región</label>
+                <select name="region"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <option value="eu-west-1">EU West 1 (Ireland)</option>
+                    <option value="eu-west-2">EU West 2 (London)</option>
+                    <option value="eu-west-3">EU West 3 (Paris)</option>
+                    <option value="eu-central-1">EU Central 1 (Frankfurt)</option>
+                    <option value="us-east-1">US East 1 (N. Virginia)</option>
+                    <option value="us-east-2">US East 2 (Ohio)</option>
+                    <option value="us-west-1">US West 1 (N. California)</option>
+                    <option value="us-west-2">US West 2 (Oregon)</option>
+                    <option value="sa-east-1">SA East 1 (São Paulo)</option>
+                    <option value="ap-southeast-1">AP Southeast 1 (Singapore)</option>
+                    <option value="ap-northeast-1">AP Northeast 1 (Tokyo)</option>
+                </select>
+            </div>
+
+            <button type="submit" id="submitBtn"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <span id="btnText">🚀 Analizar Infraestructura</span>
+                <span id="btnLoading" class="hidden">
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Analizando... esto puede tardar unos minutos
+                </span>
+            </button>
+        </form>
+    </div>
+
+    <div class="mt-6 bg-gray-800/50 rounded-lg border border-gray-700 p-5">
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">📋 Métodos de conexión</h3>
+        <div class="space-y-3">
+            <div>
+                <p class="text-gray-300 text-sm font-medium">🔐 AssumeRole (recomendado)</p>
+                <p class="text-gray-400 text-sm">Solo necesitas el Account ID. Se asume el rol <code class="text-yellow-400">cct_role_read_only</code> con credenciales temporales.</p>
+            </div>
+            <div>
+                <p class="text-gray-300 text-sm font-medium">🔑 Access Keys</p>
+                <p class="text-gray-400 text-sm">Para cuentas sin rol configurado. Requiere un usuario IAM con <code class="text-yellow-400">ReadOnlyAccess</code>.</p>
+            </div>
+        </div>
+        <div class="mt-3 pt-3 border-t border-gray-700">
+            <p class="text-gray-500 text-xs">
+                💡 La generación de documentación y sugerencias con IA se ejecuta desde la cuenta de Altostratus.
+                El cliente solo necesita permisos de lectura.
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    function switchTab(mode) {
+        document.getElementById("authMode").value = mode;
+        const assumeTab = document.getElementById("tabAssumeRole");
+        const keysTab = document.getElementById("tabAccessKeys");
+        const assumeFields = document.getElementById("assumeRoleFields");
+        const keysFields = document.getElementById("accessKeysFields");
+
+        if (mode === "assume_role") {
+            assumeTab.className = "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-blue-600 text-white";
+            keysTab.className = "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-white";
+            assumeFields.classList.remove("hidden");
+            keysFields.classList.add("hidden");
+        } else {
+            keysTab.className = "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors bg-blue-600 text-white";
+            assumeTab.className = "flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors text-gray-400 hover:text-white";
+            keysFields.classList.remove("hidden");
+            assumeFields.classList.add("hidden");
+        }
+    }
+
+    document.getElementById("analyzeForm").addEventListener("submit", function() {
+        document.getElementById("btnText").classList.add("hidden");
+        document.getElementById("btnLoading").classList.remove("hidden");
+        document.getElementById("submitBtn").disabled = true;
+        document.getElementById("submitBtn").classList.add("opacity-75", "cursor-not-allowed");
+    });
+</script>
+{% endblock %}

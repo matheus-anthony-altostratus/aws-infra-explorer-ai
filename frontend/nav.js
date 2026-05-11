@@ -5,7 +5,9 @@ function navigate(sectionId) {
     document.getElementById("section-" + sectionId).classList.add("active");
     document.getElementById("nav-" + sectionId).classList.add("active");
 
-    if (sectionId === "home") drawArchDiagram();
+    if (sectionId === "home")     drawArchDiagram();
+    if (sectionId === "history")  loadHistory();
+    if (sectionId === "accounts") loadAccounts();
 }
 
 function copyTrustPolicy(btn) {
@@ -21,7 +23,6 @@ function copyText(text, btn) {
     setTimeout(() => { btn.textContent = "📋 Copiar"; }, 2000);
 }
 
-// Diagrama de arquitectura
 function drawArchDiagram() {
     const canvas = document.getElementById("arch-diagram");
     if (!canvas || !canvas.offsetWidth) return;
@@ -34,27 +35,25 @@ function drawArchDiagram() {
     const H = canvas.height;
 
     const nodes = [
-        { id: "browser", label: "Ingeniero", icon: "👤", x: 0.08, y: 0.5, color: "#0166ff" },
-        { id: "cf",      label: "CloudFront", icon: "⬡", x: 0.25, y: 0.5, color: "#0166ff" },
-        { id: "apigw",   label: "API Gateway", icon: "⚡", x: 0.42, y: 0.5, color: "#141d5e" },
-        { id: "lambda",  label: "Lambda", icon: "λ", x: 0.60, y: 0.5, color: "#f20e70" },
-        { id: "bedrock", label: "Bedrock", icon: "🤖", x: 0.78, y: 0.25, color: "#7c3aed" },
-        { id: "s3",      label: "S3 Outputs", icon: "🪣", x: 0.78, y: 0.75, color: "#059669" },
-        { id: "client",  label: "Cuenta Cliente", icon: "☁️", x: 0.92, y: 0.5, color: "#0166ff" },
+        { id: "browser", label: "Ingeniero",      icon: "👤", x: 0.08, y: 0.5,  color: "#0166ff" },
+        { id: "cf",      label: "CloudFront",      icon: "⬡",  x: 0.25, y: 0.5,  color: "#0166ff" },
+        { id: "apigw",   label: "API Gateway",     icon: "⚡", x: 0.42, y: 0.5,  color: "#141d5e" },
+        { id: "lambda",  label: "Lambda",           icon: "λ",  x: 0.60, y: 0.5,  color: "#f20e70" },
+        { id: "bedrock", label: "Bedrock",          icon: "🤖", x: 0.78, y: 0.25, color: "#7c3aed" },
+        { id: "s3",      label: "S3 Outputs",       icon: "🪣", x: 0.78, y: 0.75, color: "#059669" },
+        { id: "client",  label: "Cuenta Cliente",   icon: "☁️", x: 0.92, y: 0.5,  color: "#0166ff" },
     ];
 
     const edges = [
-        { from: "browser", to: "cf", label: "HTTPS" },
-        { from: "cf", to: "apigw", label: "/analyze" },
-        { from: "apigw", to: "lambda", label: "invoke" },
-        { from: "lambda", to: "bedrock", label: "InvokeModel" },
-        { from: "lambda", to: "s3", label: "PutObject" },
-        { from: "lambda", to: "client", label: "AssumeRole" },
+        { from: "browser", to: "cf",      label: "HTTPS"       },
+        { from: "cf",      to: "apigw",   label: "/analyze"    },
+        { from: "apigw",   to: "lambda",  label: "invoke"      },
+        { from: "lambda",  to: "bedrock", label: "InvokeModel" },
+        { from: "lambda",  to: "s3",      label: "PutObject"   },
+        { from: "lambda",  to: "client",  label: "AssumeRole"  },
     ];
 
-    function getPos(node) {
-        return { x: node.x * W, y: node.y * H };
-    }
+    function getPos(node) { return { x: node.x * W, y: node.y * H }; }
 
     function drawArrow(x1, y1, x2, y2, label, color) {
         const angle = Math.atan2(y2 - y1, x2 - x1);
@@ -73,7 +72,6 @@ function drawArchDiagram() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Arrowhead
         ctx.beginPath();
         ctx.moveTo(ex, ey);
         ctx.lineTo(ex - 8 * Math.cos(angle - 0.4), ey - 8 * Math.sin(angle - 0.4));
@@ -82,7 +80,6 @@ function drawArchDiagram() {
         ctx.fillStyle = color || "rgba(1,102,255,0.6)";
         ctx.fill();
 
-        // Label
         const mx = (sx + ex) / 2;
         const my = (sy + ey) / 2 - 8;
         ctx.font = "10px system-ui";
@@ -95,7 +92,6 @@ function drawArchDiagram() {
         const { x, y } = getPos(node);
         const r = 30;
 
-        // Glow
         const grd = ctx.createRadialGradient(x, y, 0, x, y, r * 1.5);
         grd.addColorStop(0, node.color + "33");
         grd.addColorStop(1, "transparent");
@@ -104,7 +100,6 @@ function drawArchDiagram() {
         ctx.fillStyle = grd;
         ctx.fill();
 
-        // Circle
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fillStyle = "#0d1424";
@@ -113,28 +108,24 @@ function drawArchDiagram() {
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Icon
         ctx.font = "18px system-ui";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(node.icon, x, y - 2);
 
-        // Label
         ctx.font = "11px system-ui";
         ctx.fillStyle = "#94a3b8";
         ctx.textBaseline = "top";
         ctx.fillText(node.label, x, y + r + 6);
     }
 
-    // Draw edges first
     edges.forEach(e => {
         const from = nodes.find(n => n.id === e.from);
-        const to = nodes.find(n => n.id === e.to);
-        const p1 = getPos(from);
-        const p2 = getPos(to);
+        const to   = nodes.find(n => n.id === e.to);
+        const p1   = getPos(from);
+        const p2   = getPos(to);
         drawArrow(p1.x, p1.y, p2.x, p2.y, e.label, from.color + "88");
     });
 
-    // Draw nodes on top
     nodes.forEach(drawNode);
 }

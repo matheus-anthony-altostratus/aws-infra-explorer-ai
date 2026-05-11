@@ -477,12 +477,22 @@
                 Inicio
             </a>
 
+            <a class="sidebar-item" onclick="navigate('accounts')" id="nav-accounts">
+                <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+                Cuentas
+            </a>
+
             <a class="sidebar-item" onclick="navigate('analyzer')" id="nav-analyzer">
                 <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 Analizador
             </a>
 
             <div class="sidebar-label">Recursos</div>
+
+            <a class="sidebar-item" onclick="navigate('history')" id="nav-history">
+                <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Historial
+            </a>
 
             <a class="sidebar-item" onclick="navigate('guide')" id="nav-guide">
                 <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -493,8 +503,8 @@
 
             <div style="padding: 12px; border-top: 1px solid var(--border); margin-top: 16px;">
                 <p style="font-size:11px; color:var(--text-secondary); text-align:center;">
-                    Powered by<br>
-                    <span style="color:#60a5fa;">Amazon Bedrock</span> · Claude Sonnet 4
+                    Created by<br>
+                    <span style="color:#60a5fa;">Anthony Matheus - CMC AWS</span>
                 </p>
             </div>
         </aside>
@@ -617,9 +627,13 @@
                         <div id="error-box" style="display:none; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:12px 16px; border-radius:8px; font-size:13px; margin-bottom:20px;"></div>
 
                         <div style="margin-bottom:16px;">
-                            <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Account ID</label>
-                            <input type="text" id="accountId" maxlength="12" pattern="\d{12}"
-                                class="input-field" placeholder="123456789012">
+                            <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Cuenta</label>
+                            <select id="accountSelect" class="input-field" onchange="onAccountSelect()">
+                                <option value="">— Selecciona una cuenta —</option>
+                            </select>
+                            <p style="font-size:12px; color:var(--text-secondary); margin:6px 0 0;">
+                                ¿No ves la cuenta? <a onclick="navigate('accounts')" style="color:#60a5fa; cursor:pointer;">Regístrala primero →</a>
+                            </p>
                         </div>
 
                         <div style="margin-bottom:20px;">
@@ -693,6 +707,112 @@
                     </div>
 
                     <button onclick="resetForm()" class="btn-secondary">🔄 Nuevo Análisis</button>
+                </div>
+
+            </section>
+
+            <!-- ===== SECCIÓN: CUENTAS ===== -->
+            <section class="section" id="section-accounts">
+
+                <div style="margin-bottom:24px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <h1 style="font-size:24px; font-weight:700; margin:0 0 6px;">Cuentas AWS</h1>
+                        <p style="color:var(--text-secondary); font-size:14px; margin:0;">Gestiona los grupos y cuentas de clientes.</p>
+                    </div>
+                    <button onclick="openAddAccount()" class="btn-primary" style="width:auto; padding:10px 20px;">
+                        + Añadir cuenta
+                    </button>
+                </div>
+
+                <div class="card">
+                    <div id="accounts-container">
+                        <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ===== MODAL: DESCARGAS ===== -->
+            <div id="downloads-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
+                <div style="background:#111827; border:1px solid var(--border); border-radius:16px; padding:32px; width:100%; max-width:500px; margin:24px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
+                        <h2 style="font-size:18px; font-weight:600; margin:0; color:var(--text-primary);">📥 Archivos del análisis</h2>
+                        <button onclick="closeDownloadsModal()" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer; line-height:1;">×</button>
+                    </div>
+                    <div id="downloads-modal-content"></div>
+                </div>
+            </div>
+
+            <!-- ===== MODAL: CUENTA ===== -->
+            <div id="account-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
+                <div style="background:#111827; border:1px solid var(--border); border-radius:16px; padding:32px; width:100%; max-width:480px; margin:24px;">
+                    <h2 id="account-form-title" style="font-size:18px; font-weight:600; margin:0 0 24px; color:var(--text-primary);">Añadir cuenta</h2>
+
+                    <div id="account-form-error" style="display:none; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+
+                    <input type="hidden" id="acc-group-id">
+
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Grupo / Cliente</label>
+                        <div style="display:flex; gap:8px;">
+                            <select id="acc-group-select" class="input-field" onchange="onGroupSelect()" style="flex:1;">
+                                <option value="">— Selecciona un grupo —</option>
+                            </select>
+                            <button type="button" onclick="toggleNewGroup()" style="white-space:nowrap; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:0 14px; border-radius:8px; font-size:13px; cursor:pointer;">+ Nuevo grupo</button>
+                        </div>
+                        <input id="acc-group-name" type="text" placeholder="Nombre del nuevo grupo (ej: Banco XYZ)" class="input-field" style="display:none; margin-top:8px;">
+                        <input type="hidden" id="acc-group-id">
+                    </div>
+
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Account ID</label>
+                        <input id="acc-account-id" type="text" maxlength="12" placeholder="123456789012" class="input-field">
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Account Name</label>
+                        <input id="acc-account-name" type="text" placeholder="Ej: Producción" class="input-field">
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Alias <span style="color:var(--text-secondary); font-weight:400;">(opcional)</span></label>
+                        <input id="acc-alias" type="text" placeholder="Ej: banco-xyz-prod" class="input-field">
+                    </div>
+                    <div style="margin-bottom:24px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Región por defecto</label>
+                        <select id="acc-region" class="input-field">
+                            <option value="eu-west-1">EU West 1 — Ireland</option>
+                            <option value="eu-west-2">EU West 2 — London</option>
+                            <option value="eu-west-3">EU West 3 — Paris</option>
+                            <option value="eu-central-1">EU Central 1 — Frankfurt</option>
+                            <option value="us-east-1">US East 1 — N. Virginia</option>
+                            <option value="us-east-2">US East 2 — Ohio</option>
+                            <option value="us-west-1">US West 1 — N. California</option>
+                            <option value="us-west-2">US West 2 — Oregon</option>
+                            <option value="sa-east-1">SA East 1 — São Paulo</option>
+                            <option value="ap-southeast-1">AP Southeast 1 — Singapore</option>
+                            <option value="ap-northeast-1">AP Northeast 1 — Tokyo</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:12px; justify-content:flex-end;">
+                        <button onclick="closeAccountModal()" class="btn-secondary">Cancelar</button>
+                        <button id="account-save-btn" onclick="saveAccount()" class="btn-primary" style="width:auto; padding:10px 24px;">Guardar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SECCIÓN: HISTORIAL ===== -->
+
+            <section class="section" id="section-history">
+
+                <div style="margin-bottom:24px;">
+                    <h1 style="font-size:24px; font-weight:700; margin:0 0 6px;">Historial de Análisis</h1>
+                    <p style="color:var(--text-secondary); font-size:14px; margin:0;">Todos los análisis realizados por el equipo de Altostratus.</p>
+                </div>
+
+                <div class="card">
+                    <div id="history-container">
+                        <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
+                    </div>
                 </div>
 
             </section>

@@ -22,6 +22,8 @@ resource "aws_lambda_function" "analyzer" {
   environment {
     variables = {
       OUTPUTS_BUCKET = var.outputs_bucket_name
+      ACCOUNTS_TABLE = aws_dynamodb_table.accounts.name
+      HISTORY_TABLE  = aws_dynamodb_table.history.name
     }
   }
 

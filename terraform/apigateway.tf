@@ -4,8 +4,8 @@ resource "aws_apigatewayv2_api" "main" {
 
   cors_configuration {
     allow_origins = ["*"]
-    allow_methods = ["POST", "GET", "OPTIONS"]
-    allow_headers = ["Content-Type"]
+    allow_methods = ["POST", "GET", "PUT", "DELETE", "OPTIONS"]
+    allow_headers = ["Content-Type", "Authorization"]
     max_age       = 3600
   }
 }
@@ -38,6 +38,36 @@ resource "aws_apigatewayv2_route" "download" {
 resource "aws_apigatewayv2_route" "status" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /status/{analysis_id}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "history" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /history"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "accounts_list" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /accounts"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "accounts_create" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /accounts"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "accounts_update" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "PUT /accounts/{group_id}/{account_id}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "accounts_delete" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "DELETE /accounts/{group_id}/{account_id}"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 

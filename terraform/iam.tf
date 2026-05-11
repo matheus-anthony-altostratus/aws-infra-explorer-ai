@@ -43,8 +43,14 @@ resource "aws_iam_role_policy" "lambda_custom" {
       {
         Sid      = "S3Outputs"
         Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject"]
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
         Resource = "${var.outputs_bucket_arn}/*"
+      },
+      {
+        Sid      = "S3OutputsList"
+        Effect   = "Allow"
+        Action   = "s3:ListBucket"
+        Resource = var.outputs_bucket_arn
       },
       {
         Sid    = "AssumeRoleClients"
@@ -53,6 +59,22 @@ resource "aws_iam_role_policy" "lambda_custom" {
         Resource = [
           aws_iam_role.reader.arn,
           "arn:aws:iam::*:role/infra-explorer-read-only"
+        ]
+      },
+      {
+        Sid    = "DynamoDB"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.accounts.arn,
+          aws_dynamodb_table.history.arn
         ]
       }
     ]

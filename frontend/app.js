@@ -1,6 +1,6 @@
-const API_URL = "https://gh41sneumj.execute-api.eu-west-1.amazonaws.com";
+const API_URL    = "https://gh41sneumj.execute-api.eu-west-1.amazonaws.com";
 const COGNITO_URL = "https://cognito-idp.eu-west-1.amazonaws.com";
-const CLIENT_ID = "1hk5o7m7h2pkvbc5eh79tdgg8n";
+const CLIENT_ID  = "1hk5o7m7h2pkvbc5eh79tdgg8n";
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
@@ -33,10 +33,7 @@ function getUserEmail() {
 async function cognitoRequest(target, body) {
     const response = await fetch(COGNITO_URL, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/x-amz-json-1.1",
-            "X-Amz-Target": target,
-        },
+        headers: { "Content-Type": "application/x-amz-json-1.1", "X-Amz-Target": target },
         body: JSON.stringify(body),
     });
     const data = await response.json();
@@ -89,10 +86,7 @@ async function setNewPassword(username, newPassword, session) {
     return { success: true };
 }
 
-function logout() {
-    clearTokens();
-    showAuthScreen("login");
-}
+function logout() { clearTokens(); showAuthScreen("login"); }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 
@@ -111,17 +105,28 @@ window.addEventListener("load", () => {
     initApp();
 });
 
-function initApp() {
+async function initApp() {
     document.getElementById("auth-screen").style.display = "none";
     document.getElementById("app-screen").style.display = "block";
+    await _fetchAccounts();
     navigate("home");
+}
+
+async function _fetchAccounts() {
+    try {
+        const response = await fetch(`${API_URL}/accounts`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        _accountsData = data.groups || [];
+        populateAccountSelect(_accountsData);
+    } catch (err) {}
 }
 
 // ─── Auth screen ─────────────────────────────────────────────────────────────
 
-let _pendingEmail = "";
-let _pendingSession = "";
-let _pendingUsername = "";
+let _pendingEmail = "", _pendingSession = "", _pendingUsername = "";
 
 function showAuthScreen(view) {
     document.getElementById("auth-screen").style.display = "flex";
@@ -172,10 +177,7 @@ async function submitRegister() {
     const password = document.getElementById("reg-password").value;
     const btn = document.getElementById("register-btn");
     if (!email || !password) { showAuthError("Completa todos los campos."); return; }
-    if (!email.toLowerCase().endsWith("@altostratus.es")) {
-        showAuthError("Solo se permiten correos @altostratus.es");
-        return;
-    }
+    if (!email.toLowerCase().endsWith("@altostratus.es")) { showAuthError("Solo se permiten correos @altostratus.es"); return; }
     if (password.length < 8) { showAuthError("La contraseña debe tener al menos 8 caracteres."); return; }
     btn.disabled = true; btn.textContent = "Registrando...";
     document.getElementById("auth-error").style.display = "none";
@@ -230,25 +232,264 @@ async function submitNewPassword() {
     }
 }
 
+// ─── Accounts ────────────────────────────────────────────────────────────────
+
+let _accountsData = [];
+let _editingAccount = null;
+
+async function loadAccounts() {
+    const container = document.getElementById("accounts-container");
+    container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Cargando cuentas...</p>`;
+    try {
+        const response = await fetch(`${API_URL}/accounts`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await response.json();
+        _accountsData = data.groups || [];
+        renderAccounts(_accountsData);
+        populateAccountSelect(_accountsData);
+    } catch (err) {
+        container.innerHTML = `<p style="color:#f472b6; font-size:14px;">Error al cargar las cuentas.</p>`;
+    }
+}
+
+async function refreshAccountSelect() {
+    await _fetchAccounts();
+}
+
+function renderAccounts(groups) {
+    const container = document.getElementById("accounts-container");
+    if (groups.length === 0) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay cuentas registradas. Usa el formulario para añadir la primera.</p>`;
+        return;
+    }
+
+    const html = groups.map(group => `
+        <div style="margin-bottom:24px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+                <span style="font-size:16px;">🏢</span>
+                <h3 style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">${group.group_name}</h3>
+                <span style="font-size:11px; color:var(--text-secondary); background:rgba(255,255,255,0.05); border:1px solid var(--border); padding:2px 8px; border-radius:10px;">${group.accounts.length} cuenta${group.accounts.length !== 1 ? "s" : ""}</span>
+            </div>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border);">
+                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account Name</th>
+                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account ID</th>
+                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Alias</th>
+                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Región por defecto</th>
+                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${group.accounts.map(acc => `
+                    <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:12px 16px; font-size:13px; font-weight:500; color:var(--text-primary);">${acc.account_name}</td>
+                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary); font-family:monospace;">${acc.account_id}</td>
+                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${acc.alias || "—"}</td>
+                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${acc.default_region}</td>
+                        <td style="padding:12px 16px; display:flex; gap:8px;">
+                            <button onclick="openEditAccount('${group.group_id}', '${acc.account_id}')" style="font-size:12px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:4px 10px; border-radius:6px; cursor:pointer;">Editar</button>
+                            <button onclick="deleteAccount('${group.group_id}', '${acc.account_id}', '${acc.account_name}')" style="font-size:12px; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:4px 10px; border-radius:6px; cursor:pointer;">Eliminar</button>
+                        </td>
+                    </tr>`).join("")}
+                </tbody>
+            </table>
+        </div>
+    `).join("");
+
+    container.innerHTML = html;
+}
+
+function populateAccountSelect(groups) {
+    const select = document.getElementById("accountSelect");
+    if (!select) return;
+    select.innerHTML = `<option value="">— Selecciona una cuenta —</option>`;
+    groups.forEach(group => {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = group.group_name;
+        group.accounts.forEach(acc => {
+            const opt = document.createElement("option");
+            opt.value = JSON.stringify({ account_id: acc.account_id, account_name: acc.account_name, default_region: acc.default_region });
+            opt.textContent = `${acc.account_name} (${acc.account_id})`;
+            optgroup.appendChild(opt);
+        });
+        select.appendChild(optgroup);
+    });
+}
+
+function onAccountSelect() {
+    const select = document.getElementById("accountSelect");
+    if (!select.value) return;
+    const acc = JSON.parse(select.value);
+    document.getElementById("region").value = acc.default_region;
+}
+
+function openAddAccount() {
+    _editingAccount = null;
+    document.getElementById("account-form-title").textContent = "Añadir cuenta";
+    document.getElementById("acc-group-id").value = "";
+    document.getElementById("acc-group-name").value = "";
+    document.getElementById("acc-group-name").style.display = "none";
+    document.getElementById("acc-account-id").value = "";
+    document.getElementById("acc-account-name").value = "";
+    document.getElementById("acc-alias").value = "";
+    document.getElementById("acc-region").value = "eu-west-1";
+    document.getElementById("acc-account-id").disabled = false;
+    _populateGroupSelect();
+    document.getElementById("account-modal").style.display = "flex";
+}
+
+function _populateGroupSelect() {
+    const select = document.getElementById("acc-group-select");
+    select.innerHTML = `<option value="">— Selecciona un grupo —</option>`;
+    _accountsData.forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g.group_id;
+        opt.textContent = g.group_name;
+        select.appendChild(opt);
+    });
+}
+
+function onGroupSelect() {
+    const select = document.getElementById("acc-group-select");
+    const group  = _accountsData.find(g => g.group_id === select.value);
+    if (group) {
+        document.getElementById("acc-group-id").value   = group.group_id;
+        document.getElementById("acc-group-name").value = group.group_name;
+        document.getElementById("acc-group-name").style.display = "none";
+    }
+}
+
+function toggleNewGroup() {
+    const input  = document.getElementById("acc-group-name");
+    const select = document.getElementById("acc-group-select");
+    const showing = input.style.display !== "none";
+    if (showing) {
+        input.style.display = "none";
+        input.value = "";
+        select.disabled = false;
+    } else {
+        input.style.display = "block";
+        input.focus();
+        select.value = "";
+        select.disabled = true;
+        document.getElementById("acc-group-id").value = "";
+    }
+}
+
+function openEditAccount(groupId, accountId) {
+    const group = _accountsData.find(g => g.group_id === groupId);
+    const acc   = group?.accounts.find(a => a.account_id === accountId);
+    if (!acc) return;
+    _editingAccount = { group_id: groupId, account_id: accountId };
+    document.getElementById("account-form-title").textContent = "Editar cuenta";
+    document.getElementById("acc-group-id").value = groupId;
+    document.getElementById("acc-group-name").value = group.group_name;
+    document.getElementById("acc-account-id").value = accountId;
+    document.getElementById("acc-account-name").value = acc.account_name;
+    document.getElementById("acc-alias").value = acc.alias || "";
+    document.getElementById("acc-region").value = acc.default_region;
+    document.getElementById("acc-account-id").disabled = true;
+    document.getElementById("account-modal").style.display = "flex";
+}
+
+function closeAccountModal() {
+    document.getElementById("account-modal").style.display = "none";
+    document.getElementById("account-form-error").style.display = "none";
+}
+
+async function saveAccount() {
+    const groupId     = document.getElementById("acc-group-id").value.trim();
+    const groupName   = document.getElementById("acc-group-name").value.trim();
+    const accountId   = document.getElementById("acc-account-id").value.trim();
+    const accountName = document.getElementById("acc-account-name").value.trim();
+    const alias       = document.getElementById("acc-alias").value.trim();
+    const region      = document.getElementById("acc-region").value;
+    const errorEl     = document.getElementById("account-form-error");
+    errorEl.style.display = "none";
+
+    if (!groupName || !accountId || !accountName) {
+        errorEl.textContent = "Grupo, Account ID y Account Name son requeridos.";
+        errorEl.style.display = "block";
+        return;
+    }
+    if (!/^\d{12}$/.test(accountId)) {
+        errorEl.textContent = "El Account ID debe ser un número de 12 dígitos.";
+        errorEl.style.display = "block";
+        return;
+    }
+
+    const btn = document.getElementById("account-save-btn");
+    btn.disabled = true; btn.textContent = "Guardando...";
+
+    try {
+        let response;
+        if (_editingAccount) {
+            response = await fetch(`${API_URL}/accounts/${_editingAccount.group_id}/${_editingAccount.account_id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+                body: JSON.stringify({ group_name: groupName, account_name: accountName, alias, default_region: region }),
+            });
+        } else {
+            response = await fetch(`${API_URL}/accounts`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+                body: JSON.stringify({ group_id: groupId || undefined, group_name: groupName, account_id: accountId, account_name: accountName, alias, default_region: region }),
+            });
+        }
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || "Error al guardar");
+        }
+        closeAccountModal();
+        loadAccounts();
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = "block";
+    } finally {
+        btn.disabled = false; btn.textContent = "Guardar";
+    }
+}
+
+async function deleteAccount(groupId, accountId, accountName) {
+    if (!confirm(`¿Eliminar la cuenta "${accountName}" (${accountId})?`)) return;
+    try {
+        const response = await fetch(`${API_URL}/accounts/${groupId}/${accountId}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (!response.ok) throw new Error("Error al eliminar");
+        loadAccounts();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
 // ─── Analyzer ────────────────────────────────────────────────────────────────
 
 async function analyze() {
-    const accountId = document.getElementById("accountId").value.trim();
-    const region = document.getElementById("region").value;
-    const errorBox = document.getElementById("error-box");
+    const select    = document.getElementById("accountSelect");
+    const region    = document.getElementById("region").value;
+    const errorBox  = document.getElementById("error-box");
     errorBox.style.display = "none";
-    if (!accountId || !/^\d{12}$/.test(accountId)) {
-        errorBox.textContent = "El Account ID debe ser un número de 12 dígitos.";
+
+    if (!select.value) {
+        errorBox.textContent = "Selecciona una cuenta para analizar.";
         errorBox.style.display = "block";
         return;
     }
+
+    const acc = JSON.parse(select.value);
     setLoading(true);
     try {
         const response = await fetch(`${API_URL}/analyze`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-            body: JSON.stringify({ account_id: accountId, region: region }),
+            body: JSON.stringify({ account_id: acc.account_id, region, user_email: getUserEmail() }),
         });
+
         if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Error desconocido");
@@ -287,10 +528,10 @@ function showResults(data) {
     const downloadLinks = document.getElementById("downloadLinks");
     downloadLinks.innerHTML = "";
     const fileLabels = {
-        ["infra_" + data.region + ".json"]: "📄 JSON",
-        ["documentation_" + data.region + ".md"]: "📄 Documentación (.md)",
-        ["suggestions_" + data.region + ".md"]: "💡 Sugerencias (.md)",
-        ["diagram_" + data.region + ".drawio"]: "🏗️ Diagrama draw.io",
+        [`infra_${data.region}.json`]:          "📄 JSON",
+        [`documentation_${data.region}.md`]:    "📄 Documentación (.md)",
+        [`suggestions_${data.region}.md`]:      "💡 Sugerencias (.md)",
+        [`diagram_${data.region}.drawio`]:      "🏗️ Diagrama draw.io",
     };
     for (const [filename, url] of Object.entries(data.downloads)) {
         const label = fileLabels[filename] || filename;
@@ -301,6 +542,122 @@ function showResults(data) {
     document.getElementById("form-section").style.display = "none";
     document.getElementById("results-section").style.display = "block";
     setLoading(false);
+}
+
+// ─── History ─────────────────────────────────────────────────────────────────
+
+async function loadHistory() {
+    const container = document.getElementById("history-container");
+    container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Cargando historial...</p>`;
+    try {
+        const response = await fetch(`${API_URL}/history`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await response.json();
+        renderHistory(data.analyses || []);
+    } catch (err) {
+        container.innerHTML = `<p style="color:#f472b6; font-size:14px;">Error al cargar el historial.</p>`;
+    }
+}
+
+function renderHistory(analyses) {
+    const container = document.getElementById("history-container");
+    if (analyses.length === 0) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay análisis registrados aún.</p>`;
+        return;
+    }
+
+    const rows = analyses.map(a => {
+        const date    = new Date(a.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+        const age     = (Date.now() - new Date(a.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+        const expired = age > 30;
+        const downloads = expired
+            ? `<span style="color:var(--text-secondary); font-size:12px;">Expirado</span>`
+            : `<a onclick="redownload('${a.analysis_id}', '${a.region}')" style="color:#60a5fa; cursor:pointer; font-size:13px;">Ver descargas</a>`;
+        return `
+        <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${date}</td>
+            <td style="padding:12px 16px;">
+                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0;">${a.account_name || a.account_id}</p>
+                <p style="font-size:11px; color:var(--text-secondary); margin:2px 0 0;">${a.group_name || ""}</p>
+            </td>
+            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary); font-family:monospace;">${a.account_id}</td>
+            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${a.region}</td>
+            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${a.user_email || "—"}</td>
+            <td style="padding:12px 16px;">${downloads}</td>
+        </tr>`;
+    }).join("");
+
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Fecha</th>
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Cuenta</th>
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account ID</th>
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Región</th>
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Analizado por</th>
+                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Archivos</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+async function redownload(analysisId, region) {
+    const modal   = document.getElementById("downloads-modal");
+    const content = document.getElementById("downloads-modal-content");
+    content.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Cargando archivos...</p>`;
+    modal.style.display = "flex";
+
+    try {
+        const response = await fetch(`${API_URL}/status/${analysisId}`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await response.json();
+        if (data.status !== "completed" || !data.downloads) {
+            content.innerHTML = `<p style="color:#f472b6; font-size:14px;">Los archivos de este análisis ya no están disponibles.</p>`;
+            return;
+        }
+
+        const fileLabels = {
+            [`infra_${region}.json`]:          { label: "Inventario JSON",          icon: "📊" },
+            [`documentation_${region}.md`]:    { label: "Documentación técnica",    icon: "📄" },
+            [`suggestions_${region}.md`]:      { label: "Sugerencias Well-Arch.",   icon: "💡" },
+            [`diagram_${region}.drawio`]:      { label: "Diagrama draw.io",         icon: "🏗️" },
+        };
+
+        const items = Object.entries(data.downloads).map(([filename, url]) => {
+            const meta = fileLabels[filename] || { label: filename, icon: "📁" };
+            return { filename, url, ...meta };
+        });
+
+        content.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                ${items.map(f => `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background:#060d1a; border:1px solid var(--border); border-radius:8px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:20px;">${f.icon}</span>
+                        <span style="font-size:13px; font-weight:500; color:var(--text-primary);">${f.label}</span>
+                    </div>
+                    <a href="${f.url}" target="_blank" style="font-size:12px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:6px 14px; border-radius:6px; text-decoration:none; white-space:nowrap;">⬇ Descargar</a>
+                </div>`).join("")}
+            </div>
+            <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
+                <button onclick="downloadAll(${JSON.stringify(items.map(f => f.url))})" style="background:rgba(1,102,255,0.2); border:1px solid rgba(1,102,255,0.4); color:#60a5fa; padding:8px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">⬇ Descargar todos</button>
+            </div>`;
+    } catch (err) {
+        content.innerHTML = `<p style="color:#f472b6; font-size:14px;">Error al obtener los archivos.</p>`;
+    }
+}
+
+function downloadAll(urls) {
+    urls.forEach(url => window.open(url, "_blank"));
+}
+
+function closeDownloadsModal() {
+    document.getElementById("downloads-modal").style.display = "none";
 }
 
 // ─── UI helpers ──────────────────────────────────────────────────────────────
@@ -315,14 +672,14 @@ function switchTab(tab) {
 function resetForm() {
     document.getElementById("form-section").style.display = "block";
     document.getElementById("results-section").style.display = "none";
-    document.getElementById("accountId").value = "";
+    document.getElementById("accountSelect").value = "";
     document.getElementById("error-box").style.display = "none";
 }
 
 function setLoading(loading) {
-    document.getElementById("btnText").style.display = loading ? "none" : "flex";
-    document.getElementById("btnLoading").style.display = loading ? "flex" : "none";
-    document.getElementById("submitBtn").disabled = loading;
+    document.getElementById("btnText").style.display     = loading ? "none" : "flex";
+    document.getElementById("btnLoading").style.display  = loading ? "flex" : "none";
+    document.getElementById("submitBtn").disabled        = loading;
 }
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }

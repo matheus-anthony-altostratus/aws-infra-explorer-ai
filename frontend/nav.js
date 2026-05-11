@@ -4,6 +4,8 @@ function navigate(sectionId) {
 
     document.getElementById("section-" + sectionId).classList.add("active");
     document.getElementById("nav-" + sectionId).classList.add("active");
+
+    if (sectionId === "home") drawArchDiagram();
 }
 
 function copyTrustPolicy(btn) {
@@ -20,9 +22,9 @@ function copyText(text, btn) {
 }
 
 // Diagrama de arquitectura
-window.addEventListener("load", () => {
+function drawArchDiagram() {
     const canvas = document.getElementById("arch-diagram");
-    if (!canvas) return;
+    if (!canvas || !canvas.offsetWidth) return;
 
     const ctx = canvas.getContext("2d");
     canvas.width = canvas.offsetWidth;
@@ -135,4 +137,4 @@ window.addEventListener("load", () => {
 
     // Draw nodes on top
     nodes.forEach(drawNode);
-});
+}

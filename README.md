@@ -1,214 +1,225 @@
 # AWS Infra Explorer AI
 
-Herramienta interna de Altostratus que analiza automáticamente la infraestructura AWS de clientes y genera:
-
-- Documentación técnica detallada (Markdown, generada con Amazon Bedrock - Claude Sonnet 4)
-- Sugerencias de mejora basadas en AWS Well-Architected Framework
-- Diagramas de arquitectura profesionales (draw.io con iconos AWS)
+Herramienta interna de Altostratus que analiza automáticamente la infraestructura AWS de cuentas de clientes y genera documentación técnica, sugerencias Well-Architected y diagramas de arquitectura.
 
 ---
 
-## Arquitectura
-┌─────────────────────────────────────────────────────────────┐
-│ Ingeniero abre https://d2y8h0jbecvclg.cloudfront.net │
-└──────────────┬──────────────────────────────────────────────┘
-│
-┌──────────────▼──────────────────────────────────────────────┐
-│ CloudFront (CDN + HTTPS) │
-│ ├── /* → S3 Frontend (HTML/CSS/JS) │
-│ └── /analyze, /download → API Gateway → Lambda │
-└──────────────┬──────────────────────────────────────────────┘
-│
-┌──────────────▼──────────────────────────────────────────────┐
-│ Lambda (Python 3.12, 1024MB, 10min timeout) │
-│ ├── STS AssumeRole → cuenta del cliente (ReadOnlyAccess) │
-│ ├── 16 extractores boto3 (VPC, EC2, RDS, ECS, EKS, etc.) │
-│ ├── Amazon Bedrock (Claude Sonnet 4) → doc + sugerencias │
-│ ├── draw.io generator (XML programático) │
-│ └── Upload outputs → S3 (presigned URLs) │
-└─────────────────────────────────────────────────────────────┘
+## Cómo funciona
 
+```
+                        ┌─────────────────────────────────────────┐
+                        │         AWS Infra Explorer AI            │
+                        └─────────────────────────────────────────┘
+
+  ┌──────────┐    HTTPS    ┌─────────────┐    S3 OAC    ┌──────────────────┐
+  │ Ingeniero│ ──────────► │ CloudFront  │ ────────────► │  S3 Frontend     │
+  │(Browser) │             │   (CDN)     │               │  index.html      │
+  └────┬─────┘             └─────────────┘               │  app.js / nav.js │
+       │                                                  └──────────────────┘
+       │ 1. Login con @altostratus.es
+       │ ◄──────────────────────────────────────────── Cognito (JWT)
+       │
+       │ 2. POST /analyze {account_id, region}
+       │ ──────────────────────────────────────────►  API Gateway
+       │                                               (valida JWT)
+       │                                                    │
+       │ 3. 202 {analysis_id}                               ▼
+       │ ◄──────────────────────────────────────────── Lambda (sync)
+       │                                               auto-invoca async ──►  Lambda (async)
+       │                                                                            │
+       │                                                              ┌─────────────┼─────────────┐
+       │                                                              ▼             ▼             ▼
+       │                                                       Cuenta Cliente   Bedrock      S3 Outputs
+       │                                                       (AssumeRole)   (Claude S4)  (status.json)
+       │                                                       16 extractores  doc + suger.  + archivos
+       │
+       │ 4. GET /status/{analysis_id}  (polling cada 5s)
+       │ ──────────────────────────────────────────────►  API Gateway → Lambda → S3
+       │ ◄──────────────────────────────────────────────  {status: "completed", presigned URLs}
+       │
+       │ 5. Descarga archivos via presigned URLs (1h validez)
+       └──────────────────────────────────────────────────────────────────────────────►  S3 Outputs
+```
+
+**Pasos del flujo:**
+
+1. El ingeniero abre la URL y se autentica con su cuenta `@altostratus.es`
+2. Introduce el Account ID de la cuenta cliente y la región a analizar
+3. La Lambda asume el rol `infra-explorer-read-only` en la cuenta cliente via STS
+4. Extrae la infraestructura con 16 extractores boto3
+5. Genera documentación y sugerencias con Amazon Bedrock (Claude Sonnet 4)
+6. Genera un diagrama draw.io con iconos AWS oficiales
+7. Sube los outputs a S3 y devuelve presigned URLs al frontend
 
 ---
 
 ## Infraestructura (Terraform)
 
-La infraestructura está dividida en dos stacks independientes:
+Dos stacks independientes para separar lo que cambia frecuentemente de lo que no:
 
 | Stack | Contenido | Frecuencia de cambio |
 |---|---|---|
-| `terraform/persistent/` | S3 buckets + CloudFront | Rara vez (no se destruye) |
-| `terraform/app/` | Lambda + API Gateway + IAM | Frecuente (destroy/apply sin miedo) |
+| `terraform/persistent/` | S3 buckets + CloudFront | Rara vez — **NO destruir** |
+| `terraform/` | Lambda + API Gateway + IAM + Cognito | Frecuente — destroy/apply sin miedo |
 
-### Recursos desplegados
+> ⚠️ Al hacer destroy/apply del stack de app, API Gateway se recrea con nueva URL.
+> Hay que actualizar `API_URL` en `frontend/app.js` y redesplegar el frontend.
 
-| Recurso | Nombre/URL |
+---
+
+## Recursos desplegados
+
+| Recurso | Valor |
 |---|---|
 | CloudFront | `https://d2y8h0jbecvclg.cloudfront.net` |
 | S3 Frontend | `infra-explorer-frontend-sandbox` |
-| S3 Outputs | `infra-explorer-outputs-sandbox` (lifecycle 30 días) |
-| API Gateway | `https://gdz678r5rl.execute-api.eu-west-1.amazonaws.com` |
-| Lambda | `infra-explorer-analyzer` |
+| S3 Outputs | `infra-explorer-outputs-sandbox` (lifecycle 30 días, SSE-S3) |
+| API Gateway | `https://gh41sneumj.execute-api.eu-west-1.amazonaws.com` |
+| Lambda Analyzer | `infra-explorer-analyzer` |
+| Lambda Cognito Trigger | `infra-explorer-cognito-presignup` |
+| Cognito User Pool | `eu-west-1_DyJrMHx9N` |
+| Cognito Client ID | `1hk5o7m7h2pkvbc5eh79tdgg8n` |
+| CloudFront Distribution | `E1MHNIQHI7VQ5F` |
+
+---
+
+## Estructura del proyecto
+
+```
+aws-infra-explorer-ai/
+├── src/
+│   ├── lambda_handler.py          # Entry point Lambda — flujo asíncrono con polling
+│   ├── cognito_presignup/
+│   │   └── handler.py             # Lambda trigger — bloquea emails no @altostratus.es
+│   ├── core/
+│   │   ├── orchestrator.py        # Coordina extractores y generadores
+│   │   └── session_manager.py     # Gestión sesiones boto3 (AssumeRole)
+│   ├── extractors/                # 16 extractores de servicios AWS
+│   ├── generators/
+│   │   ├── bedrock_generator.py   # Documentación + sugerencias con IA
+│   │   └── drawio_generator.py    # Diagramas draw.io (XML)
+│   └── models/
+│       └── infra_model.py         # Dataclasses de recursos AWS
+├── frontend/
+│   ├── index.html                 # Shell principal — auth screen + app screen
+│   ├── app.js                     # Auth (Cognito) + analizador + polling
+│   ├── nav.js                     # Navegación + diagrama canvas
+│   └── assets/
+│       ├── logo.png
+│       └── favicon.ico
+├── terraform/
+│   ├── persistent/                # S3 + CloudFront — NO destruir
+│   │   ├── s3.tf
+│   │   ├── cloudfront.tf
+│   │   └── outputs.tf
+│   ├── iam.tf                     # Roles Lambda + reader + Cognito trigger
+│   ├── lambda.tf                  # Lambda analyzer
+│   ├── apigateway.tf              # HTTP API + rutas + JWT authorizer Cognito
+│   ├── cognito.tf                 # User Pool + App Client
+│   ├── cognito_trigger.tf         # Lambda pre-signup + permisos
+│   └── outputs.tf
+├── scripts/
+│   ├── deploy_lambda.sh           # Build zip + update Lambda function code
+│   └── deploy_frontend.sh         # S3 sync + CloudFront invalidation
+└── prompts/
+    ├── documentation_prompt.txt
+    └── suggestions_prompt.txt
+```
+
+---
+
+## Servicios analizados
+
+| Categoría | Servicios |
+|---|---|
+| Networking | VPCs, Subnets, IGW, NAT GW, Route Tables, VPC Peering, Elastic IPs |
+| Compute | EC2 Instances |
+| Containers | ECS Clusters, EKS Clusters |
+| Database | RDS Instances |
+| Storage | EFS File Systems |
+| Load Balancing | ALB, NLB (con Listeners y Target Groups) |
+| Connectivity | Transit GW, VPN, Direct Connect |
+| Security | Security Groups |
+
+---
+
+## Seguridad
+
+- Sin credenciales estáticas — AssumeRole con credenciales temporales de 1 hora
+- JWT Cognito validado por API Gateway antes de llegar a Lambda
+- Pre-signup trigger bloquea registros con email que no sea `@altostratus.es`
+- S3 outputs privado — acceso solo via presigned URLs (1h validez)
+- S3 frontend accesible solo via CloudFront OAC (no público directo)
+- Outputs encriptados SSE-S3 (AES256), lifecycle automático de 30 días
+
+---
+
+## Requisitos para el cliente
+
+Crear un rol IAM en la cuenta a analizar:
+
+- **Nombre:** `infra-explorer-read-only`
+- **Política:** `ReadOnlyAccess` (AWS managed)
+- **Trust Policy:**
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [{
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": "arn:aws:iam::590183851235:role/infra-explorer-lambda-role"
+        },
+        "Action": "sts:AssumeRole"
+    }]
+}
+```
 
 ---
 
 ## Perfiles AWS
 
-| Perfil | Uso | Permisos |
-|---|---|---|
-| `sandbox` | Terraform + deploy (cuenta sandbox vía cuenta de salto) | cmc_role_admin |
-| `infra-explorer` | Bedrock (solo ejecución local) | Usuario IAM en sandbox |
+| Perfil | Uso |
+|---|---|
+| `sandbox` | Terraform + deploy — AssumeRole `cmc_role_admin` en cuenta `590183851235` |
+| `infra-explorer` | Bedrock local (legacy) |
 
 ---
 
-### Requisitos
-
-- Terraform >= 1.5
-- AWS CLI v2
-- aws-vault configurado con perfil `sandbox`
-
-### Infraestructura (solo la primera vez o al cambiar infra)
+## Despliegue
 
 ```bash
-# Stack persistente (S3 + CloudFront)
-cd terraform/persistent
-aws-vault exec sandbox -- terraform init
-aws-vault exec sandbox -- terraform apply
+# Entrar a la sesión AWS (una sola vez por terminal)
+aws-vault exec sandbox
 
-# Stack de aplicación (Lambda + API Gateway + IAM)
-cd terraform/app
-aws-vault exec sandbox -- terraform init
-aws-vault exec sandbox -- terraform apply
+# Solo primera vez o cambios en S3/CloudFront
+cd terraform/persistent && terraform init && terraform apply
 
+# Lambda + API Gateway + IAM + Cognito
+cd terraform && terraform init && terraform apply
 
-Copy
+# Código Lambda
+./scripts/deploy_lambda.sh
 
-Insert at cursor
-Deploy Lambda (código backend)
-aws-vault exec sandbox -- ./scripts/deploy_lambda.sh
-
-Copy
-
-Insert at cursor
-bash
-Deploy Frontend
-aws-vault exec sandbox -- ./scripts/deploy_frontend.sh
-
-Copy
-
-Insert at cursor
-bash
-Estructura del Proyecto
-aws-infra-explorer-ai/
-│
-├── src/                              # Código fuente
-│   ├── lambda_handler.py             # Entry point Lambda (API Gateway)
-│   ├── core/
-│   │   ├── orchestrator.py           # Coordina extractores y generadores
-│   │   └── session_manager.py        # Gestión de sesiones boto3 (AssumeRole)
-│   ├── extractors/                   # 16 extractores de servicios AWS
-│   ├── generators/
-│   │   ├── bedrock_generator.py      # Documentación + sugerencias con IA
-│   │   └── drawio_generator.py       # Diagramas draw.io (XML)
-│   ├── models/
-│   │   └── infra_model.py            # Dataclasses de recursos AWS
-│   └── web/                          # Interfaz web local (FastAPI, legacy)
-│
-├── frontend/                         # Frontend estático (CloudFront + S3)
-│   ├── index.html
-│   └── app.js
-│
-├── terraform/
-│   ├── persistent/                   # S3 + CloudFront (no se destruye)
-│   └── app/                          # Lambda + API Gateway + IAM
-│
-├── scripts/
-│   ├── deploy_lambda.sh              # Build + deploy del código Lambda
-│   └── deploy_frontend.sh            # Sync frontend a S3 + invalidar cache
-│
-├── prompts/                          # Prompts para Amazon Bedrock
-│   ├── documentation_prompt.txt
-│   └── suggestions_prompt.txt
-│
-└── requirements.txt                  # Dependencias Python (ejecución local)
-
-
-Copy
-
-Insert at cursor
-Servicios AWS Analizados
-Categoría	Servicios
-Networking	VPCs, Subnets, Internet Gateways, NAT Gateways, Route Tables, VPC Peering, Elastic IPs
-Compute	EC2 Instances
-Database	RDS Instances
-Containers	ECS Clusters (con Services), EKS Clusters
-Storage	EFS File Systems
-Load Balancing	ALB, NLB (con Listeners y Target Groups)
-Connectivity	Transit Gateways, VPN (Gateways, Customer Gateways, Connections), Direct Connect
-Security	Security Groups
-Seguridad
-Sin credenciales estáticas: la Lambda usa AssumeRole con credenciales temporales (1 hora)
-
-Nunca se escriben Access Keys: el flujo es exclusivamente AssumeRole
-
-Outputs encriptados: S3 con SSE-S3 (AES256)
-
-Lifecycle automático: outputs se eliminan a los 30 días
-
-Bucket privado: acceso solo vía presigned URLs generadas por Lambda
-
-Sin autenticación web (por ahora): pendiente Cognito para futuro
-
-Requisitos para el Cliente
-El cliente debe crear un rol IAM en su cuenta:
-
-Nombre: infra-explorer-read-only
-
-Política: ReadOnlyAccess (AWS managed policy)
-
-Trust Policy:
-
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": "arn:aws:iam::590183851235:role/infra-explorer-lambda-role"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
-}
-
-Copy
-
-Insert at cursor
-json
-Ejecución Local (legacy)
-El proyecto también puede ejecutarse localmente con FastAPI:
-
-source venv/bin/activate
-aws-vault exec infra-explorer -- uvicorn src.web.app:app --reload --port 8000
-
-Copy
-
-Insert at cursor
-bash
-Roadmap
-Fase	Descripción	Estado
-1	Extracción de infraestructura con boto3	✅
-2	Integración con Amazon Bedrock (Claude Sonnet 4)	✅
-3	Validación y configuración (error handling, argparse)	✅
-4	Servicios expandidos (RT, ELB, TGW, VPN, EIP, DX, ECS, EFS, EKS)	✅
-5	Optimización de prompts	✅
-6	Diagramas draw.io (generación programática con XML)	✅
-7	Refactor: sesión boto3 inyectable + paginación	✅
-8	Interfaz web (FastAPI + Jinja2)	✅
-9	Despliegue serverless (Terraform + Lambda + CloudFront)	✅
-10	Autenticación (Amazon Cognito)	⬜ Pendiente
-11	Historial de análisis + gestión de clientes	⬜ Pendiente
-12	Pestañas en diagrama draw.io (por categoría)	⬜ Pendiente
-13	Dominio personalizado (Route 53 + ACM)	⬜ Pendiente
+# Frontend
+./scripts/deploy_frontend.sh
+```
 
 ---
+
+## Roadmap
+
+| Fase | Descripción | Estado |
+|---|---|---|
+| 1 | Extracción de infraestructura con boto3 | ✅ |
+| 2 | Integración con Amazon Bedrock (Claude Sonnet 4) | ✅ |
+| 3 | Error handling y validaciones | ✅ |
+| 4 | Servicios expandidos (ELB, TGW, VPN, EIP, DX, ECS, EFS, EKS) | ✅ |
+| 5 | Optimización de prompts | ✅ |
+| 6 | Diagramas draw.io (XML programático) | ✅ |
+| 7 | Refactor: sesión boto3 inyectable + paginación | ✅ |
+| 8 | Despliegue serverless (Terraform + Lambda + CloudFront) | ✅ |
+| 9 | Autenticación (Amazon Cognito) | ✅ |
+| 10 | Historial de análisis compartido | ⬜ Pendiente |
+| 11 | Pestañas en diagrama draw.io por categoría | ⬜ Pendiente |
+| 12 | Dominio personalizado (Route 53 + ACM) | ⬜ Pendiente |

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AWS Infra Explorer AI — Altostratus</title>
     <link rel="icon" href="assets/favicon.ico">
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
@@ -365,16 +364,104 @@
         .copy-btn:hover { background: rgba(1,102,255,0.35); }
     </style>
 </head>
-<body>
+<body style="visibility:hidden;">
 
-    <!-- NAVBAR -->
+    <!-- ===== PANTALLA DE AUTH ===== -->
+    <div id="auth-screen" style="display:none; min-height:100vh; align-items:center; justify-content:center; background:radial-gradient(ellipse at 60% 0%, rgba(1,102,255,0.12) 0%, transparent 60%), radial-gradient(ellipse at 0% 100%, rgba(242,14,112,0.08) 0%, transparent 50%), #0a0f1e;">
+        <div style="width:100%; max-width:420px; padding:24px;">
+            <div style="text-align:center; margin-bottom:32px;">
+                <img src="assets/logo.png" alt="Altostratus" style="height:40px; filter:brightness(0) invert(1); margin-bottom:16px;">
+                <h1 style="font-size:20px; font-weight:700; margin:0 0 4px; color:#f1f5f9;">Infra Explorer <span style="background:linear-gradient(135deg,#0166ff,#f20e70); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">AI</span></h1>
+                <p style="font-size:13px; color:#64748b; margin:0;">Herramienta interna de Altostratus</p>
+            </div>
+            <div style="background:#111827; border:1px solid #1e2a45; border-radius:16px; padding:32px; box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+                <div id="auth-error" style="display:none; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+
+                <!-- LOGIN -->
+                <div id="view-login">
+                    <h2 style="font-size:18px; font-weight:600; margin:0 0 4px; color:#f1f5f9;">Iniciar sesión</h2>
+                    <p style="font-size:13px; color:#64748b; margin:0 0 24px;">Accede con tu cuenta de Altostratus</p>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Correo corporativo</label>
+                        <input id="login-email" type="email" placeholder="nombre@altostratus.es" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitLogin()">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Contraseña</label>
+                        <input id="login-password" type="password" placeholder="••••••••" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitLogin()">
+                    </div>
+                    <button id="login-btn" onclick="submitLogin()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Iniciar sesión</button>
+                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;">¿No tienes cuenta? <a onclick="showAuthScreen('register')" style="color:#60a5fa; cursor:pointer;">Regístrate</a></p>
+                </div>
+
+                <!-- REGISTER -->
+                <div id="view-register" style="display:none;">
+                    <h2 style="font-size:18px; font-weight:600; margin:0 0 4px; color:#f1f5f9;">Crear cuenta</h2>
+                    <p style="font-size:13px; color:#64748b; margin:0 0 16px;">Solo correos <strong style="color:#60a5fa;">@altostratus.es</strong></p>
+                    <div style="background:rgba(1,102,255,0.08); border:1px solid rgba(1,102,255,0.2); border-radius:8px; padding:10px 14px; margin-bottom:16px;">
+                        <p style="font-size:12px; color:#60a5fa; margin:0;">🔐 Solo el personal de Altostratus puede registrarse. Se requiere correo corporativo <strong>@altostratus.es</strong></p>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Correo corporativo</label>
+                        <input id="reg-email" type="email" placeholder="nombre@altostratus.es" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Contraseña</label>
+                        <input id="reg-password" type="password" placeholder="Mínimo 8 caracteres, mayúsculas y números" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;">
+                    </div>
+                    <button id="register-btn" onclick="submitRegister()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Crear cuenta</button>
+                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;">¿Ya tienes cuenta? <a onclick="showAuthScreen('login')" style="color:#60a5fa; cursor:pointer;">Inicia sesión</a></p>
+                </div>
+
+                <!-- CONFIRM -->
+                <div id="view-confirm" style="display:none;">
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <span style="font-size:40px;">📧</span>
+                        <h2 style="font-size:18px; font-weight:600; margin:8px 0 4px; color:#f1f5f9;">Verifica tu correo</h2>
+                        <p style="font-size:13px; color:#64748b; margin:0;">Hemos enviado un código de verificación a tu correo corporativo.</p>
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Código de verificación</label>
+                        <input id="confirm-code" type="text" placeholder="123456" maxlength="6" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:18px; letter-spacing:0.3em; text-align:center; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitConfirm()">
+                    </div>
+                    <button id="confirm-btn" onclick="submitConfirm()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Verificar</button>
+                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;"><a onclick="showAuthScreen('login')" style="color:#60a5fa; cursor:pointer;">Volver al login</a></p>
+                </div>
+
+                <!-- NEW PASSWORD -->
+                <div id="view-newpassword" style="display:none;">
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <span style="font-size:40px;">🔑</span>
+                        <h2 style="font-size:18px; font-weight:600; margin:8px 0 4px; color:#f1f5f9;">Nueva contraseña</h2>
+                        <p style="font-size:13px; color:#64748b; margin:0;">Debes establecer una nueva contraseña para continuar.</p>
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Nueva contraseña</label>
+                        <input id="newpwd-password" type="password" placeholder="Mínimo 8 caracteres" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitNewPassword()">
+                    </div>
+                    <button id="newpwd-btn" onclick="submitNewPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">Guardar contraseña</button>
+                </div>
+            </div>
+            <p style="text-align:center; font-size:11px; color:#334155; margin-top:20px;">AWS Infra Explorer AI — Uso interno Altostratus</p>
+        </div>
+    </div>
+
+    <!-- ===== APP ===== -->
+    <div id="app-screen" style="display:none;">
+
+        <!-- NAVBAR -->
     <header class="navbar">
         <div style="display:flex; align-items:center; gap:12px; flex:1;">
             <img src="assets/logo.png" alt="Altostratus" style="height:32px; filter: brightness(0) invert(1);">
             <div style="width:1px; height:24px; background:var(--border);"></div>
             <span style="font-size:15px; font-weight:600; color:var(--text-primary);">Infra Explorer <span class="gradient-text">AI</span></span>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div id="user-info" style="display:none; align-items:center; gap:8px;">
+                <span style="font-size:11px; color:var(--text-secondary);" id="user-email"></span>
+                <button onclick="logout()" style="font-size:11px; background:rgba(242,14,112,0.15); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:3px 10px; border-radius:20px; cursor:pointer;">
+                    Cerrar sesión
+                </button>
+            </div>
             <span style="font-size:11px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:3px 10px; border-radius:20px;">Beta</span>
         </div>
     </header>
@@ -723,8 +810,10 @@
 
         </main>
     </div>
+    </div> <!-- cierra app-screen -->
 
     <script src="nav.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>

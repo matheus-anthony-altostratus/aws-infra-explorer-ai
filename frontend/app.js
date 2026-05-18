@@ -337,6 +337,7 @@ function openAddAccount() {
     document.getElementById("acc-alias").value = "";
     document.getElementById("acc-region").value = "eu-west-1";
     document.getElementById("acc-account-id").disabled = false;
+    document.querySelector("input[name='acc-color'][value='#0166ff']").checked = true;
     _populateGroupSelect();
     document.getElementById("account-modal").style.display = "flex";
 }
@@ -392,6 +393,8 @@ function openEditAccount(groupId, accountId) {
     document.getElementById("acc-alias").value = acc.alias || "";
     document.getElementById("acc-region").value = acc.default_region;
     document.getElementById("acc-account-id").disabled = true;
+    const colorInput = document.querySelector(`input[name='acc-color'][value='${acc.color || "#0166ff"}']`);
+    if (colorInput) colorInput.checked = true;
     document.getElementById("account-modal").style.display = "flex";
 }
 
@@ -407,7 +410,10 @@ async function saveAccount() {
     const accountName = document.getElementById("acc-account-name").value.trim();
     const alias       = document.getElementById("acc-alias").value.trim();
     const region      = document.getElementById("acc-region").value;
+    const colorInput  = document.querySelector("input[name='acc-color']:checked");
+    const color       = colorInput ? colorInput.value : "#0166ff";
     const errorEl     = document.getElementById("account-form-error");
+
     errorEl.style.display = "none";
 
     if (!groupName || !accountId || !accountName) {
@@ -430,13 +436,13 @@ async function saveAccount() {
             response = await fetch(`${API_URL}/accounts/${_editingAccount.group_id}/${_editingAccount.account_id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-                body: JSON.stringify({ group_name: groupName, account_name: accountName, alias, default_region: region }),
+                body: JSON.stringify({ group_name: groupName, account_name: accountName, alias, default_region: region, color }),
             });
         } else {
             response = await fetch(`${API_URL}/accounts`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-                body: JSON.stringify({ group_id: groupId || undefined, group_name: groupName, account_id: accountId, account_name: accountName, alias, default_region: region }),
+                body: JSON.stringify({ group_id: groupId || undefined, group_name: groupName, account_id: accountId, account_name: accountName, alias, default_region: region, color }),
             });
         }
         if (!response.ok) {
@@ -475,6 +481,12 @@ async function analyze() {
     const errorBox  = document.getElementById("error-box");
     errorBox.style.display = "none";
 
+    if (!isTokenValid()) {
+        clearTokens();
+        showAuthScreen("login");
+        return;
+    }
+
     if (!select.value) {
         errorBox.textContent = "Selecciona una cuenta para analizar.";
         errorBox.style.display = "block";
@@ -502,7 +514,8 @@ async function analyze() {
 }
 
 async function pollStatus(analysisId) {
-    const errorBox = document.getElementById("error-box");
+    const errorBox  = document.getElementById("error-box");
+    const stepLabel = document.getElementById("step-label");
     while (true) {
         await sleep(5000);
         try {
@@ -511,6 +524,7 @@ async function pollStatus(analysisId) {
             });
             if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
             const data = await response.json();
+            if (data.step && stepLabel) stepLabel.textContent = data.step;
             if (data.status === "completed") { showResults(data); return; }
             if (data.status === "error") throw new Error(data.error || "Error durante el análisis");
         } catch (error) {
@@ -555,55 +569,107 @@ async function loadHistory() {
         });
         if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
         const data = await response.json();
-        renderHistory(data.analyses || []);
+        renderHistory(data.groups || []);
+
     } catch (err) {
         container.innerHTML = `<p style="color:#f472b6; font-size:14px;">Error al cargar el historial.</p>`;
     }
 }
 
-function renderHistory(analyses) {
+function renderHistory(groups) {
     const container = document.getElementById("history-container");
-    if (analyses.length === 0) {
+    if (!groups || groups.length === 0) {
         container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay análisis registrados aún.</p>`;
         return;
     }
 
-    const rows = analyses.map(a => {
-        const date    = new Date(a.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
-        const age     = (Date.now() - new Date(a.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        const expired = age > 30;
-        const downloads = expired
+    const thStyle = `padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; border-bottom:1px solid var(--border);`;
+
+    const rows = groups.map(g => {
+        const color      = g.color || "#0166ff";
+        const colorAlpha = color + "22";
+        const latest     = g.analyses[0];
+        const latestDate = new Date(latest.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+        const age        = (Date.now() - new Date(latest.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+        const expired    = age > 30;
+        const groupKey   = `${g.account_id}_${g.region}`;
+
+        const latestDownload = expired
             ? `<span style="color:var(--text-secondary); font-size:12px;">Expirado</span>`
-            : `<a onclick="redownload('${a.analysis_id}', '${a.region}')" style="color:#60a5fa; cursor:pointer; font-size:13px;">Ver descargas</a>`;
+            : `<a onclick="redownload('${g.s3_prefix}', '${g.region}')" style="color:${color}; cursor:pointer; font-size:13px; font-weight:500;">📥 Ver archivos</a>`;
+
+        const hasHistory = g.analyses.length > 1;
+        const toggleBtn  = hasHistory
+            ? `<button onclick="toggleHistory('${groupKey}')" id="toggle-${groupKey}" style="background:none; border:1px solid ${color}44; color:${color}; padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">▼ ${g.analyses.length - 1} anterior${g.analyses.length - 1 > 1 ? "es" : ""}</button>`
+            : "";
+
+        const historyRows = g.analyses.slice(1).map(a => {
+            const d   = new Date(a.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+            return `<tr style="background:${colorAlpha}; border-bottom:1px solid ${color}22;">
+                <td style="padding:8px 16px; border-left:4px solid ${color}66;"></td>
+                <td style="padding:8px 16px;"></td>
+                <td style="padding:8px 16px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">${d}</td>
+                <td style="padding:8px 16px; font-size:12px; color:var(--text-secondary);">${a.user_email || "—"}</td>
+                <td style="padding:8px 16px;"></td>
+            </tr>`;
+        }).join("");
+
+        const historyPanel = hasHistory
+            ? `<tr id="history-panel-${groupKey}" style="display:none;">
+                <td colspan="5" style="padding:0; background:${colorAlpha};">
+                    <div style="padding:6px 16px; border-top:1px solid ${color}33;">
+                        <span style="font-size:11px; font-weight:600; color:${color}; text-transform:uppercase; letter-spacing:.05em;">Análisis anteriores</span>
+                    </div>
+                    <table style="width:100%; border-collapse:collapse;">${historyRows}</table>
+                </td>
+            </tr>`
+            : "";
+
         return `
-        <tr style="border-bottom:1px solid var(--border);">
-            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${date}</td>
-            <td style="padding:12px 16px;">
-                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0;">${a.account_name || a.account_id}</p>
-                <p style="font-size:11px; color:var(--text-secondary); margin:2px 0 0;">${a.group_name || ""}</p>
+        <tr style="border-bottom:1px solid ${color}33; border-left:4px solid ${color}; background:${colorAlpha};">
+            <td style="padding:14px 16px;">
+                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0;">${g.account_name}</p>
+                <p style="font-size:11px; color:var(--text-secondary); margin:2px 0 0;">${g.group_name} · ${g.account_id}</p>
             </td>
-            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary); font-family:monospace;">${a.account_id}</td>
-            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${a.region}</td>
-            <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${a.user_email || "—"}</td>
-            <td style="padding:12px 16px;">${downloads}</td>
-        </tr>`;
+            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${g.region}</td>
+            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${latestDate}</td>
+            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${latest.user_email || "—"}</td>
+            <td style="padding:14px 16px; white-space:nowrap;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    ${latestDownload}
+                    ${toggleBtn}
+                </div>
+            </td>
+        </tr>
+        ${historyPanel}`;
     }).join("");
 
     container.innerHTML = `
         <table style="width:100%; border-collapse:collapse;">
             <thead>
-                <tr style="border-bottom:1px solid var(--border);">
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Fecha</th>
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Cuenta</th>
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account ID</th>
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Región</th>
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Analizado por</th>
-                    <th style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Archivos</th>
+                <tr>
+                    <th style="${thStyle}">Cuenta</th>
+                    <th style="${thStyle}">Región</th>
+                    <th style="${thStyle}">Último análisis</th>
+                    <th style="${thStyle}">Analizado por</th>
+                    <th style="${thStyle}">Archivos</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
         </table>`;
 }
+
+
+function toggleHistory(groupKey) {
+    const panel  = document.getElementById(`history-panel-${groupKey}`);
+    const btn    = document.getElementById(`toggle-${groupKey}`);
+    const open   = panel.style.display !== "none";
+    panel.style.display = open ? "none" : "table-row";
+    const count  = btn.textContent.match(/\d+/)?.[0] || "";
+    const label  = count ? `${count} anterior${parseInt(count) > 1 ? "es" : ""}` : "anteriores";
+    btn.textContent = open ? `▼ ${label}` : `▲ ${label}`;
+}
+
 
 async function redownload(analysisId, region) {
     const modal   = document.getElementById("downloads-modal");

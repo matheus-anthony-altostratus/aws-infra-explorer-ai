@@ -221,6 +221,17 @@ class EKSCluster(CloudResource):
 
 
 @dataclass
+class DynamoDBTable(CloudResource):
+    status: str = ""
+    billing_mode: str = ""
+    read_capacity: int = 0
+    write_capacity: int = 0
+    item_count: int = 0
+    size_bytes: int = 0
+    encryption: str = ""
+
+
+@dataclass
 class InfrastructureData:
     region: str = ""
     vpcs: List[VPC] = field(default_factory=list)
@@ -242,6 +253,7 @@ class InfrastructureData:
     ecs_clusters: List[ECSCluster] = field(default_factory=list)
     efs_file_systems: List[EFSFileSystem] = field(default_factory=list)
     eks_clusters: List[EKSCluster] = field(default_factory=list)
+    dynamodb_tables: List[DynamoDBTable] = field(default_factory=list)
 
 
 @dataclass

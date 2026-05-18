@@ -2,19 +2,19 @@ import json
 import os
 import uuid
 import boto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr
 from core.session_manager import SessionManager
 from core.orchestrator import InfraOrchestrator
 from generators.bedrock_generator import BedrockGenerator
 
-s3_client      = boto3.client("s3")
-lambda_client  = boto3.client("lambda")
-dynamodb       = boto3.resource("dynamodb")
+s3_client     = boto3.client("s3")
+lambda_client = boto3.client("lambda")
+dynamodb      = boto3.resource("dynamodb")
 
-OUTPUTS_BUCKET  = os.environ["OUTPUTS_BUCKET"]
-FUNCTION_NAME   = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "")
-ACCOUNTS_TABLE  = os.environ.get("ACCOUNTS_TABLE", "infra-explorer-accounts")
-HISTORY_TABLE   = os.environ.get("HISTORY_TABLE", "infra-explorer-history")
+OUTPUTS_BUCKET = os.environ["OUTPUTS_BUCKET"]
+FUNCTION_NAME  = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "")
+ACCOUNTS_TABLE = os.environ.get("ACCOUNTS_TABLE", "infra-explorer-accounts")
+HISTORY_TABLE  = os.environ.get("HISTORY_TABLE",  "infra-explorer-history")
 
 
 # ─── Router ──────────────────────────────────────────────────────────────────
@@ -56,14 +56,15 @@ def _handle_analyze(event):
         if not account_id or not account_id.isdigit() or len(account_id) != 12:
             return _response(400, {"error": "account_id debe ser un número de 12 dígitos"})
 
-        # Obtener account_name y group_name desde DynamoDB
-        account_name, group_name = _get_account_info(account_id)
-
+        account_name, group_name, color = _get_account_info(account_id)
         body_email  = body.get("user_email", "").strip()
         user_email  = body_email or _get_user_email(event)
-        analysis_id = f"{account_id}_{region}"
+        analysis_id = str(uuid.uuid4())[:8]
 
-        _save_status(analysis_id, {"status": "processing", "region": region})
+        # La carpeta S3 usa account_id + region para sobreescribir siempre
+        s3_prefix = f"{account_id}_{region}"
+
+        _save_status(s3_prefix, {"status": "processing", "region": region})
 
         lambda_client.invoke(
             FunctionName=FUNCTION_NAME,
@@ -71,16 +72,18 @@ def _handle_analyze(event):
             Payload=json.dumps({
                 "async_analyze": {
                     "analysis_id": analysis_id,
+                    "s3_prefix":   s3_prefix,
                     "account_id":  account_id,
                     "account_name": account_name,
                     "group_name":  group_name,
+                    "color":       color,
                     "region":      region,
                     "user_email":  user_email,
                 }
             }),
         )
 
-        return _response(202, {"analysis_id": analysis_id, "status": "processing"})
+        return _response(202, {"analysis_id": s3_prefix, "status": "processing"})
 
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -88,45 +91,56 @@ def _handle_analyze(event):
 
 def _run_analysis(params):
     analysis_id  = params["analysis_id"]
+    s3_prefix    = params["s3_prefix"]
     account_id   = params["account_id"]
     account_name = params.get("account_name", account_id)
     group_name   = params.get("group_name", "")
+    color        = params.get("color", "#0166ff")
     region       = params["region"]
     user_email   = params.get("user_email", "")
 
+    def step(label):
+        _save_status(s3_prefix, {"status": "processing", "region": region, "step": label})
+
     try:
+        step("🔐 Conectando con la cuenta AWS...")
         role_arn     = f"arn:aws:iam::{account_id}:role/infra-explorer-read-only"
         session      = SessionManager(region_name=region, role_arn=role_arn)
         orchestrator = InfraOrchestrator(session=session)
 
-        infra        = orchestrator.collect()
-        infra_json   = orchestrator.export_to_json(infra, output_dir="/tmp")
+        step("🔍 Extrayendo infraestructura (VPCs, EC2, RDS, ECS, EKS...)...")
+        infra      = orchestrator.collect()
+        infra_json = orchestrator.export_to_json(infra, output_dir="/tmp")
 
+        step("📝 Generando documentación técnica con IA...")
         prompts_dir  = os.path.join(os.path.dirname(__file__), "prompts")
         bedrock      = BedrockGenerator(region_name=region, prompts_dir=prompts_dir)
         report       = bedrock.generate_report(infra)
         report_paths = bedrock.export_report(report, region, output_dir="/tmp")
 
-        drawio_path  = orchestrator.generate_drawio(infra, output_dir="/tmp")
+        step("🏗️ Generando diagrama de arquitectura draw.io...")
+        drawio_path = orchestrator.generate_drawio(infra, output_dir="/tmp")
 
+        step("☁️ Subiendo archivos a S3...")
         files = {
-            f"infra_{region}.json":          infra_json,
-            f"documentation_{region}.md":    report_paths["documentation"],
-            f"suggestions_{region}.md":      report_paths["suggestions"],
-            f"diagram_{region}.drawio":      drawio_path,
+            f"infra_{region}.json":       infra_json,
+            f"documentation_{region}.md": report_paths["documentation"],
+            f"suggestions_{region}.md":   report_paths["suggestions"],
+            f"diagram_{region}.drawio":   drawio_path,
         }
 
         download_urls = {}
         for filename, filepath in files.items():
-            s3_key = f"{analysis_id}/{filename}"
+            s3_key = f"{s3_prefix}/{filename}"
             s3_client.upload_file(filepath, OUTPUTS_BUCKET, s3_key)
             download_urls[filename] = _generate_presigned_url(s3_key)
 
-        _save_status(analysis_id, {
+        _save_status(s3_prefix, {
             "status":        "completed",
             "account_id":    account_id,
             "account_name":  account_name,
             "group_name":    group_name,
+            "color":         color,
             "region":        region,
             "documentation": report.documentation,
             "suggestions":   report.suggestions,
@@ -135,17 +149,19 @@ def _run_analysis(params):
 
         _save_history({
             "analysis_id":  analysis_id,
+            "s3_prefix":    s3_prefix,
             "timestamp":    _now_iso(),
             "account_id":   account_id,
             "account_name": account_name,
             "group_name":   group_name,
+            "color":        color,
             "region":       region,
             "user_email":   user_email,
             "status":       "completed",
         })
 
     except Exception as e:
-        _save_status(analysis_id, {"status": "error", "error": str(e)})
+        _save_status(s3_prefix, {"status": "error", "error": str(e)})
 
 
 # ─── Status & Download ───────────────────────────────────────────────────────
@@ -186,24 +202,45 @@ def _handle_history(event):
         while "LastEvaluatedKey" in response:
             response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
-        items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-        return _response(200, {"analyses": items})
+
+        # Agrupar por account_id + region
+        groups = {}
+        for item in items:
+            key = f"{item['account_id']}_{item['region']}"
+            if key not in groups:
+                groups[key] = {
+                    "account_id":   item["account_id"],
+                    "account_name": item.get("account_name", item["account_id"]),
+                    "group_name":   item.get("group_name", ""),
+                    "color":        item.get("color", "#0166ff"),
+                    "region":       item["region"],
+                    "s3_prefix":    item.get("s3_prefix", key),
+                    "analyses":     [],
+                }
+            groups[key]["analyses"].append({
+                "analysis_id": item["analysis_id"],
+                "timestamp":   item.get("timestamp", ""),
+                "user_email":  item.get("user_email", ""),
+                "status":      item.get("status", ""),
+            })
+
+        # Ordenar análisis dentro de cada grupo por timestamp desc
+        result = []
+        for g in groups.values():
+            g["analyses"].sort(key=lambda x: x["timestamp"], reverse=True)
+            result.append(g)
+
+        # Ordenar grupos por el timestamp del análisis más reciente
+        result.sort(key=lambda x: x["analyses"][0]["timestamp"] if x["analyses"] else "", reverse=True)
+
+        return _response(200, {"groups": result})
     except Exception as e:
         return _response(500, {"error": str(e)})
 
 
 def _save_history(entry):
-    table = dynamodb.Table(HISTORY_TABLE)
-    # Eliminar registro anterior del mismo account_id + region si existe
-    try:
-        existing = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr("analysis_id").eq(entry["analysis_id"])
-        )
-        for item in existing.get("Items", []):
-            table.delete_item(Key={"analysis_id": item["analysis_id"], "timestamp": item["timestamp"]})
-    except Exception:
-        pass
-    table.put_item(Item=entry)
+    dynamodb.Table(HISTORY_TABLE).put_item(Item=entry)
+
 
 # ─── Accounts ────────────────────────────────────────────────────────────────
 
@@ -216,7 +253,6 @@ def _handle_accounts_list(event):
             response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
 
-        # Agrupar por group_id
         groups = {}
         for item in items:
             gid = item["group_id"]
@@ -224,13 +260,14 @@ def _handle_accounts_list(event):
                 groups[gid] = {
                     "group_id":   gid,
                     "group_name": item.get("group_name", ""),
-                    "accounts":   []
+                    "accounts":   [],
                 }
             groups[gid]["accounts"].append({
                 "account_id":     item["account_id"],
                 "account_name":   item.get("account_name", ""),
                 "alias":          item.get("alias", ""),
                 "default_region": item.get("default_region", "eu-west-1"),
+                "color":          item.get("color", "#0166ff"),
             })
 
         result = sorted(groups.values(), key=lambda x: x["group_name"])
@@ -241,13 +278,14 @@ def _handle_accounts_list(event):
 
 def _handle_accounts_create(event):
     try:
-        body         = json.loads(event.get("body", "{}"))
-        group_id     = body.get("group_id") or str(uuid.uuid4())[:8]
-        group_name   = body.get("group_name", "").strip()
-        account_id   = body.get("account_id", "").strip()
-        account_name = body.get("account_name", "").strip()
-        alias        = body.get("alias", "").strip()
+        body           = json.loads(event.get("body", "{}"))
+        group_id       = body.get("group_id") or str(uuid.uuid4())[:8]
+        group_name     = body.get("group_name", "").strip()
+        account_id     = body.get("account_id", "").strip()
+        account_name   = body.get("account_name", "").strip()
+        alias          = body.get("alias", "").strip()
         default_region = body.get("default_region", "eu-west-1").strip()
+        color          = body.get("color", "#0166ff").strip()
 
         if not group_name or not account_id or not account_name:
             return _response(400, {"error": "group_name, account_id y account_name son requeridos"})
@@ -261,6 +299,7 @@ def _handle_accounts_create(event):
             "account_name":   account_name,
             "alias":          alias,
             "default_region": default_region,
+            "color":          color,
             "created_at":     _now_iso(),
         })
 
@@ -271,23 +310,23 @@ def _handle_accounts_create(event):
 
 def _handle_accounts_update(event):
     try:
-        params       = event.get("pathParameters", {})
-        group_id     = params.get("group_id")
-        account_id   = params.get("account_id")
-        body         = json.loads(event.get("body", "{}"))
+        params     = event.get("pathParameters", {})
+        group_id   = params.get("group_id")
+        account_id = params.get("account_id")
+        body       = json.loads(event.get("body", "{}"))
 
         if not group_id or not account_id:
             return _response(400, {"error": "group_id y account_id requeridos"})
 
-        table = dynamodb.Table(ACCOUNTS_TABLE)
-        table.update_item(
+        dynamodb.Table(ACCOUNTS_TABLE).update_item(
             Key={"group_id": group_id, "account_id": account_id},
-            UpdateExpression="SET group_name=:gn, account_name=:an, alias=:al, default_region=:dr",
+            UpdateExpression="SET group_name=:gn, account_name=:an, alias=:al, default_region=:dr, color=:co",
             ExpressionAttributeValues={
                 ":gn": body.get("group_name", ""),
                 ":an": body.get("account_name", ""),
                 ":al": body.get("alias", ""),
                 ":dr": body.get("default_region", "eu-west-1"),
+                ":co": body.get("color", "#0166ff"),
             },
         )
         return _response(200, {"updated": True})
@@ -315,32 +354,33 @@ def _handle_accounts_delete(event):
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _get_account_info(account_id):
-    """Busca account_name y group_name en DynamoDB por account_id."""
     try:
         table    = dynamodb.Table(ACCOUNTS_TABLE)
-        response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr("account_id").eq(account_id)
-        )
-        items = response.get("Items", [])
+        response = table.scan(FilterExpression=Attr("account_id").eq(account_id))
+        items    = response.get("Items", [])
         if items:
-            return items[0].get("account_name", account_id), items[0].get("group_name", "")
+            return (
+                items[0].get("account_name", account_id),
+                items[0].get("group_name", ""),
+                items[0].get("color", "#0166ff"),
+            )
     except Exception:
         pass
-    return account_id, ""
+    return account_id, "", "#0166ff"
 
 
-def _save_status(analysis_id, data):
+def _save_status(s3_prefix, data):
     s3_client.put_object(
         Bucket=OUTPUTS_BUCKET,
-        Key=f"{analysis_id}/status.json",
+        Key=f"{s3_prefix}/status.json",
         Body=json.dumps(data),
         ContentType="application/json",
     )
 
 
-def _get_status(analysis_id):
+def _get_status(s3_prefix):
     try:
-        response = s3_client.get_object(Bucket=OUTPUTS_BUCKET, Key=f"{analysis_id}/status.json")
+        response = s3_client.get_object(Bucket=OUTPUTS_BUCKET, Key=f"{s3_prefix}/status.json")
         return json.loads(response["Body"].read())
     except Exception:
         return None

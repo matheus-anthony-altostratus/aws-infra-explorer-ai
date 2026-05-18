@@ -19,6 +19,7 @@ from extractors.ecs_extractor import ECSExtractor
 from extractors.efs_extractor import EFSExtractor
 from extractors.eks_extractor import EKSExtractor
 from extractors.elb_extractor import ELBExtractor
+from extractors.dynamodb_extractor import DynamoDBExtractor
 from generators.bedrock_generator import BedrockGenerator
 from generators.drawio_generator import DrawioGenerator
 from models.infra_model import InfrastructureData
@@ -51,6 +52,7 @@ class InfraOrchestrator:
             "ECS Clusters": lambda: ECSExtractor(self.session).extract_ecs_clusters(),
             "EFS File Systems": lambda: EFSExtractor(self.session).extract_file_systems(),
             "EKS Clusters": lambda: EKSExtractor(self.session).extract_eks_clusters(),
+            "DynamoDB Tables": lambda: DynamoDBExtractor(self.session).extract_tables(),
         }
 
         results = {}
@@ -82,6 +84,7 @@ class InfraOrchestrator:
             ecs_clusters=results["ECS Clusters"],
             efs_file_systems=results["EFS File Systems"],
             eks_clusters=results["EKS Clusters"],
+            dynamodb_tables=results["DynamoDB Tables"],
         )
 
     def export_to_json(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
@@ -110,6 +113,7 @@ class InfraOrchestrator:
             "ecs_clusters": "ECS Clusters",
             "efs_file_systems": "EFS File Systems",
             "eks_clusters": "EKS Clusters",
+            "dynamodb_tables": "DynamoDB Tables",
         }
 
         for key, label in resource_labels.items():

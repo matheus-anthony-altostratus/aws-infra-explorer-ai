@@ -41,6 +41,10 @@ def handler(event, context):
         return _handle_accounts_update(event)
     elif route_key.startswith("DELETE /accounts/"):
         return _handle_accounts_delete(event)
+    elif route_key == "GET /profiles/{group_id}":
+        return _handle_profile_get(event)
+    elif route_key == "PUT /profiles/{group_id}":
+        return _handle_profile_put(event)
     else:
         return _response(404, {"error": "Not found"})
 
@@ -405,6 +409,50 @@ def _generate_presigned_url(s3_key):
         Params={"Bucket": OUTPUTS_BUCKET, "Key": s3_key},
         ExpiresIn=3600,
     )
+
+
+def _handle_profile_get(event):
+    try:
+        group_id = event.get("pathParameters", {}).get("group_id")
+        if not group_id:
+            return _response(400, {"error": "group_id requerido"})
+        item = dynamodb.Table(ACCOUNTS_TABLE).get_item(
+            Key={"group_id": group_id, "account_id": "PROFILE"}
+        ).get("Item")
+        if not item:
+            return _response(200, {"profile": {}})
+        return _response(200, {"profile": {
+            "cmc_level":       item.get("cmc_level", ""),
+            "identity":        item.get("identity", ""),
+            "cicd":            item.get("cicd", []),
+            "containers":      item.get("containers", []),
+            "observability":   item.get("observability", []),
+            "runbook":         item.get("runbook", ""),
+        }})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+def _handle_profile_put(event):
+    try:
+        group_id = event.get("pathParameters", {}).get("group_id")
+        if not group_id:
+            return _response(400, {"error": "group_id requerido"})
+        body = json.loads(event.get("body", "{}"))
+        dynamodb.Table(ACCOUNTS_TABLE).put_item(Item={
+            "group_id":      group_id,
+            "account_id":    "PROFILE",
+            "cmc_level":     body.get("cmc_level", ""),
+            "identity":      body.get("identity", ""),
+            "cicd":          body.get("cicd", []),
+            "containers":    body.get("containers", []),
+            "observability": body.get("observability", []),
+            "runbook":       body.get("runbook", ""),
+            "updated_at":    _now_iso(),
+        })
+        return _response(200, {"saved": True})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
 
 
 def _response(status_code, body, headers=None):

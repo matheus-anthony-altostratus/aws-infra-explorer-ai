@@ -35,21 +35,25 @@ function drawArchDiagram() {
     const H = canvas.height;
 
     const nodes = [
-        { id: "browser", label: "Ingeniero",      icon: "👤", x: 0.08, y: 0.5,  color: "#0166ff" },
-        { id: "cf",      label: "CloudFront",      icon: "⬡",  x: 0.25, y: 0.5,  color: "#0166ff" },
-        { id: "apigw",   label: "API Gateway",     icon: "⚡", x: 0.42, y: 0.5,  color: "#141d5e" },
-        { id: "lambda",  label: "Lambda",           icon: "λ",  x: 0.60, y: 0.5,  color: "#f20e70" },
-        { id: "bedrock", label: "Bedrock",          icon: "🤖", x: 0.78, y: 0.25, color: "#7c3aed" },
-        { id: "s3",      label: "S3 Outputs",       icon: "🪣", x: 0.78, y: 0.75, color: "#059669" },
-        { id: "client",  label: "Cuenta Cliente",   icon: "☁️", x: 0.92, y: 0.5,  color: "#0166ff" },
+        { id: "browser", label: "Ingeniero",     icon: "👤", x: 0.05, y: 0.5,  color: "#0166ff" },
+        { id: "cf",      label: "CloudFront",     icon: "⬡",  x: 0.18, y: 0.5,  color: "#0166ff" },
+        { id: "cognito", label: "Cognito",         icon: "🔐", x: 0.18, y: 0.18, color: "#f20e70" },
+        { id: "apigw",   label: "API Gateway",    icon: "⚡", x: 0.35, y: 0.5,  color: "#141d5e" },
+        { id: "lambda",  label: "Lambda",          icon: "λ",  x: 0.52, y: 0.5,  color: "#f20e70" },
+        { id: "bedrock", label: "Bedrock",         icon: "🤖", x: 0.70, y: 0.2,  color: "#7c3aed" },
+        { id: "s3",      label: "S3 Outputs",      icon: "🪣", x: 0.70, y: 0.5,  color: "#059669" },
+        { id: "dynamo",  label: "DynamoDB",        icon: "🗄️", x: 0.70, y: 0.8,  color: "#b45309" },
+        { id: "client",  label: "Cuenta Cliente",  icon: "☁️", x: 0.88, y: 0.5,  color: "#0166ff" },
     ];
 
     const edges = [
         { from: "browser", to: "cf",      label: "HTTPS"       },
+        { from: "browser", to: "cognito", label: "login"        },
         { from: "cf",      to: "apigw",   label: "/analyze"    },
         { from: "apigw",   to: "lambda",  label: "invoke"      },
         { from: "lambda",  to: "bedrock", label: "InvokeModel" },
         { from: "lambda",  to: "s3",      label: "PutObject"   },
+        { from: "lambda",  to: "dynamo",  label: "PutItem"     },
         { from: "lambda",  to: "client",  label: "AssumeRole"  },
     ];
 

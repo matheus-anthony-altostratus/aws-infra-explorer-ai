@@ -2,7 +2,7 @@ const API_URL    = "https://gh41sneumj.execute-api.eu-west-1.amazonaws.com";
 const COGNITO_URL = "https://cognito-idp.eu-west-1.amazonaws.com";
 const CLIENT_ID  = "1hk5o7m7h2pkvbc5eh79tdgg8n";
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 function getToken() { return localStorage.getItem("access_token"); }
 
@@ -88,7 +88,7 @@ async function setNewPassword(username, newPassword, session) {
 
 function logout() { clearTokens(); showAuthScreen("login"); }
 
-// ─── Init ────────────────────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
 
 window.addEventListener("load", () => {
     if (!isTokenValid()) {
@@ -119,12 +119,15 @@ async function _fetchAccounts() {
         });
         if (!response.ok) return;
         const data = await response.json();
-        _accountsData = data.groups || [];
+        _accountsData = (data.groups || []).map(g => ({
+            ...g,
+            accounts: g.accounts.filter(a => a.account_id !== "PROFILE"),
+        }));
         populateAccountSelect(_accountsData);
     } catch (err) {}
 }
 
-// ─── Auth screen ─────────────────────────────────────────────────────────────
+// ─── Auth screen ──────────────────────────────────────────────────────────────
 
 let _pendingEmail = "", _pendingSession = "", _pendingUsername = "";
 
@@ -232,10 +235,11 @@ async function submitNewPassword() {
     }
 }
 
-// ─── Accounts ────────────────────────────────────────────────────────────────
+// ─── Accounts ─────────────────────────────────────────────────────────────────
 
 let _accountsData = [];
 let _editingAccount = null;
+let _profilesCache = {};
 
 async function loadAccounts() {
     const container = document.getElementById("accounts-container");
@@ -246,7 +250,11 @@ async function loadAccounts() {
         });
         if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
         const data = await response.json();
-        _accountsData = data.groups || [];
+        _accountsData = (data.groups || []).map(g => ({
+            ...g,
+            accounts: g.accounts.filter(a => a.account_id !== "PROFILE"),
+        }));
+        _profilesCache = {};
         renderAccounts(_accountsData);
         populateAccountSelect(_accountsData);
     } catch (err) {
@@ -254,93 +262,153 @@ async function loadAccounts() {
     }
 }
 
-async function refreshAccountSelect() {
-    await _fetchAccounts();
-}
-
 function renderAccounts(groups) {
     const container = document.getElementById("accounts-container");
+    window._openGroups = window._openGroups || {};
     if (groups.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay cuentas registradas. Usa el formulario para añadir la primera.</p>`;
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay cuentas registradas.</p>`;
         return;
     }
 
-    const html = groups.map(group => `
-        <div style="margin-bottom:24px;">
-            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+    const cmcColors = { esencial: "#6B7280", avanzado: "#0166ff", gestionado: "#10b981" };
+    const cmcLabels = { esencial: "Esencial", avanzado: "Avanzado", gestionado: "Gestionado" };
+
+    const html = groups.map(group => {
+        const color      = group.accounts[0]?.color || "#0166ff";
+        const colorAlpha = color + "18";
+        const profile    = _profilesCache[group.group_id] || {};
+        const cmcLevel   = profile.cmc_level || "";
+        const cmcColor   = cmcColors[cmcLevel] || "#6B7280";
+        const hasTerraform = profile.iac === "Terraform";
+
+        const badges = [
+            cmcLevel ? `<span style="font-size:11px; background:${cmcColor}22; color:${cmcColor}; border:1px solid ${cmcColor}44; padding:2px 8px; border-radius:10px; font-weight:600;">${cmcLabels[cmcLevel]}</span>` : "",
+            hasTerraform ? `<span style="font-size:11px; background:rgba(124,58,237,0.15); color:#a78bfa; border:1px solid rgba(124,58,237,0.3); padding:2px 8px; border-radius:10px;">Terraform</span>` : "",
+        ].filter(Boolean).join("");
+
+        return `
+        <div style="margin-bottom:12px; border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+            <div onclick="toggleGroup('${group.group_id}')" style="display:flex; align-items:center; gap:10px; padding:14px 18px; cursor:pointer; background:${colorAlpha}; border-left:4px solid ${color}; user-select:none;">
+                <span id="arrow-${group.group_id}" style="font-size:12px; color:var(--text-secondary); transition:transform .2s;">▶</span>
                 <span style="font-size:16px;">🏢</span>
-                <h3 style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0;">${group.group_name}</h3>
-                <span style="font-size:11px; color:var(--text-secondary); background:rgba(255,255,255,0.05); border:1px solid var(--border); padding:2px 8px; border-radius:10px;">${group.accounts.length} cuenta${group.accounts.length !== 1 ? "s" : ""}</span>
+                <h3 style="font-size:14px; font-weight:600; color:var(--text-primary); margin:0; flex:1;">${group.group_name}</h3>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    ${badges}
+                    <span style="font-size:11px; color:var(--text-secondary); background:rgba(255,255,255,0.05); border:1px solid var(--border); padding:2px 8px; border-radius:10px;">${group.accounts.length} cuenta${group.accounts.length !== 1 ? "s" : ""}</span>
+                <button onclick="event.stopPropagation(); openProfile('${group.group_id}', '${group.group_name}')" style="font-size:11px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#34d399; padding:3px 10px; border-radius:6px; cursor:pointer;">📋 Perfil</button>
+                    <button onclick="event.stopPropagation(); openAddAccountInGroup('${group.group_id}', '${group.group_name}')" style="font-size:11px; background:rgba(1,102,255,0.1); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:3px 10px; border-radius:6px; cursor:pointer;">+ Cuenta</button>
+                    <button onclick="event.stopPropagation(); openEditGroup('${group.group_id}', '${group.group_name}')" style="font-size:11px; background:rgba(255,255,255,0.05); border:1px solid var(--border); color:var(--text-secondary); padding:3px 10px; border-radius:6px; cursor:pointer;">✏️</button>
+                    <button onclick="event.stopPropagation(); deleteGroup('${group.group_id}', '${group.group_name}')" style="font-size:11px; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:3px 10px; border-radius:6px; cursor:pointer;">🗑️</button>
+                </div>
             </div>
-            <table style="width:100%; border-collapse:collapse;">
-                <thead>
-                    <tr style="border-bottom:1px solid var(--border);">
-                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account Name</th>
-                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account ID</th>
-                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Alias</th>
-                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Región por defecto</th>
-                        <th style="padding:8px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${group.accounts.map(acc => `
-                    <tr style="border-bottom:1px solid var(--border);">
-                        <td style="padding:12px 16px; font-size:13px; font-weight:500; color:var(--text-primary);">${acc.account_name}</td>
-                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary); font-family:monospace;">${acc.account_id}</td>
-                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${acc.alias || "—"}</td>
-                        <td style="padding:12px 16px; font-size:13px; color:var(--text-secondary);">${acc.default_region}</td>
-                        <td style="padding:12px 16px; display:flex; gap:8px;">
-                            <button onclick="openEditAccount('${group.group_id}', '${acc.account_id}')" style="font-size:12px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:4px 10px; border-radius:6px; cursor:pointer;">Editar</button>
-                            <button onclick="deleteAccount('${group.group_id}', '${acc.account_id}', '${acc.account_name}')" style="font-size:12px; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:4px 10px; border-radius:6px; cursor:pointer;">Eliminar</button>
-                        </td>
-                    </tr>`).join("")}
-                </tbody>
-            </table>
-        </div>
-    `).join("");
+            <div id="group-${group.group_id}" style="display:none;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="background:#0a0f1e;">
+                            <th style="padding:8px 18px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account Name</th>
+                            <th style="padding:8px 18px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Account ID</th>
+                            <th style="padding:8px 18px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Alias</th>
+                            <th style="padding:8px 18px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Región</th>
+                            <th style="padding:8px 18px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${group.accounts.map(acc => `
+                        <tr style="border-top:1px solid var(--border);">
+                            <td style="padding:11px 18px; font-size:13px; font-weight:500; color:var(--text-primary);">${acc.account_name}</td>
+                            <td style="padding:11px 18px; font-size:12px; color:var(--text-secondary); font-family:monospace;">${acc.account_id}</td>
+                            <td style="padding:11px 18px; font-size:13px; color:var(--text-secondary);">${acc.alias || "—"}</td>
+                            <td style="padding:11px 18px; font-size:13px; color:var(--text-secondary);">${acc.default_region}</td>
+                            <td style="padding:11px 18px; display:flex; gap:8px;">
+                                <button onclick="openEditAccount('${group.group_id}', '${acc.account_id}')" style="font-size:12px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:4px 10px; border-radius:6px; cursor:pointer;">Editar</button>
+                                <button onclick="deleteAccount('${group.group_id}', '${acc.account_id}', '${acc.account_name}')" style="font-size:12px; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:4px 10px; border-radius:6px; cursor:pointer;">Eliminar</button>
+                            </td>
+                        </tr>`).join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+    }).join("");
 
     container.innerHTML = html;
 }
 
+function toggleGroup(groupId) {
+    const panel = document.getElementById(`group-${groupId}`);
+    const arrow = document.getElementById(`arrow-${groupId}`);
+    const open  = panel.style.display !== "none";
+    panel.style.display   = open ? "none" : "block";
+    arrow.style.transform = open ? "" : "rotate(90deg)";
+    window._openGroups[groupId] = !open;
+}
+
 function populateAccountSelect(groups) {
-    const select = document.getElementById("accountSelect");
-    if (!select) return;
-    select.innerHTML = `<option value="">— Selecciona una cuenta —</option>`;
+    // Construye lista plana para el buscador
+    window._allAccounts = [];
     groups.forEach(group => {
-        const optgroup = document.createElement("optgroup");
-        optgroup.label = group.group_name;
         group.accounts.forEach(acc => {
-            const opt = document.createElement("option");
-            opt.value = JSON.stringify({ account_id: acc.account_id, account_name: acc.account_name, default_region: acc.default_region });
-            opt.textContent = `${acc.account_name} (${acc.account_id})`;
-            optgroup.appendChild(opt);
+            window._allAccounts.push({
+                label:          `${acc.account_name} (${acc.account_id})`,
+                group:          group.group_name,
+                value:          JSON.stringify({ account_id: acc.account_id, account_name: acc.account_name, default_region: acc.default_region }),
+                default_region: acc.default_region,
+            });
         });
-        select.appendChild(optgroup);
     });
 }
 
-function onAccountSelect() {
-    const select = document.getElementById("accountSelect");
-    if (!select.value) return;
-    const acc = JSON.parse(select.value);
+function filterAccounts() {
+    const q = document.getElementById("accountSearch").value.toLowerCase();
+    const dropdown = document.getElementById("accountDropdown");
+    const matches = (window._allAccounts || []).filter(a =>
+        a.label.toLowerCase().includes(q) || a.group.toLowerCase().includes(q)
+    );
+    renderAccountDropdown(matches);
+    dropdown.style.display = matches.length ? "block" : "none";
+}
+
+function showAccountDropdown() {
+    const q = document.getElementById("accountSearch").value.toLowerCase();
+    const all = window._allAccounts || [];
+    const matches = q ? all.filter(a => a.label.toLowerCase().includes(q) || a.group.toLowerCase().includes(q)) : all;
+    renderAccountDropdown(matches);
+    document.getElementById("accountDropdown").style.display = matches.length ? "block" : "none";
+}
+
+function hideAccountDropdown() {
+    setTimeout(() => { document.getElementById("accountDropdown").style.display = "none"; }, 150);
+}
+
+function renderAccountDropdown(items) {
+    const dropdown = document.getElementById("accountDropdown");
+    if (!items.length) {
+        dropdown.innerHTML = `<div style="padding:12px 14px; font-size:13px; color:var(--text-secondary);">Sin resultados</div>`;
+        return;
+    }
+    dropdown.innerHTML = items.map(a => `
+        <div onmousedown="selectAccount(${JSON.stringify(a.value).replace(/"/g, '"')}, '${a.label.replace(/'/g, "\\'")}')"
+             style="padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .1s;"
+             onmouseover="this.style.background='rgba(1,102,255,0.1)'" onmouseout="this.style.background=''">
+            <div style="font-size:13px; font-weight:500; color:var(--text-primary);">${a.label}</div>
+            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">${a.group}</div>
+        </div>`).join("");
+}
+
+function selectAccount(value, label) {
+    document.getElementById("accountSelect").value = value;
+    document.getElementById("accountSearch").value = label;
+    document.getElementById("accountDropdown").style.display = "none";
+    const acc = JSON.parse(value);
     document.getElementById("region").value = acc.default_region;
 }
 
-function openAddAccount() {
-    _editingAccount = null;
-    document.getElementById("account-form-title").textContent = "Añadir cuenta";
-    document.getElementById("acc-group-id").value = "";
-    document.getElementById("acc-group-name").value = "";
-    document.getElementById("acc-group-name").style.display = "none";
-    document.getElementById("acc-account-id").value = "";
-    document.getElementById("acc-account-name").value = "";
-    document.getElementById("acc-alias").value = "";
-    document.getElementById("acc-region").value = "eu-west-1";
-    document.getElementById("acc-account-id").disabled = false;
-    document.querySelector("input[name='acc-color'][value='#0166ff']").checked = true;
-    _populateGroupSelect();
-    document.getElementById("account-modal").style.display = "flex";
+function clearAccountSelection() {
+    document.getElementById("accountSelect").value = "";
+    document.getElementById("accountSearch").value = "";
+    document.getElementById("accountSearch").placeholder = "Buscar cuenta por nombre o grupo...";
 }
+
+function onAccountSelect() {}
 
 function _populateGroupSelect() {
     const select = document.getElementById("acc-group-select");
@@ -351,6 +419,31 @@ function _populateGroupSelect() {
         opt.textContent = g.group_name;
         select.appendChild(opt);
     });
+}
+
+function openAddAccount() {
+    _editingAccount = null;
+    document.getElementById("account-form-title").textContent = "Añadir cuenta";
+    document.getElementById("acc-group-id").value = "";
+    document.getElementById("acc-group-name").value = "";
+    document.getElementById("acc-group-name").style.display = "none";
+    document.getElementById("acc-group-select").disabled = false;
+    document.getElementById("acc-account-id").value = "";
+    document.getElementById("acc-account-name").value = "";
+    document.getElementById("acc-alias").value = "";
+    document.getElementById("acc-region").value = "eu-west-1";
+    document.getElementById("acc-account-id").disabled = false;
+    document.querySelector("input[name='acc-color'][value='#0166ff']").checked = true;
+    _populateGroupSelect();
+    document.getElementById("account-modal").style.display = "flex";
+}
+
+function openAddAccountInGroup(groupId, groupName) {
+    openAddAccount();
+    const select = document.getElementById("acc-group-select");
+    select.value = groupId;
+    document.getElementById("acc-group-id").value = groupId;
+    document.getElementById("acc-group-name").value = groupName;
 }
 
 function onGroupSelect() {
@@ -395,7 +488,47 @@ function openEditAccount(groupId, accountId) {
     document.getElementById("acc-account-id").disabled = true;
     const colorInput = document.querySelector(`input[name='acc-color'][value='${acc.color || "#0166ff"}']`);
     if (colorInput) colorInput.checked = true;
+    _populateGroupSelect();
     document.getElementById("account-modal").style.display = "flex";
+}
+
+function openEditGroup(groupId, groupName) {
+    const newName = prompt("Nuevo nombre del grupo:", groupName);
+    if (!newName || newName.trim() === groupName) return;
+    const group = _accountsData.find(g => g.group_id === groupId);
+    if (!group) return;
+    // Actualizar todas las cuentas del grupo con el nuevo nombre
+    Promise.all(group.accounts.map(acc =>
+        fetch(`${API_URL}/accounts/${groupId}/${acc.account_id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+            body: JSON.stringify({
+                group_name:     newName.trim(),
+                account_name:   acc.account_name,
+                alias:          acc.alias || "",
+                default_region: acc.default_region,
+                color:          acc.color || "#0166ff",
+            }),
+        })
+    )).then(() => loadAccounts()).catch(() => alert("Error al renombrar el grupo."));
+}
+
+async function deleteGroup(groupId, groupName) {
+    const group = _accountsData.find(g => g.group_id === groupId);
+    if (!group) return;
+    const count = group.accounts.length;
+    if (!confirm(`¿Eliminar el grupo "${groupName}" y sus ${count} cuenta${count !== 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return;
+    try {
+        await Promise.all(group.accounts.map(acc =>
+            fetch(`${API_URL}/accounts/${groupId}/${acc.account_id}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${getToken()}` },
+            })
+        ));
+        loadAccounts();
+    } catch {
+        alert("Error al eliminar el grupo.");
+    }
 }
 
 function closeAccountModal() {
@@ -473,27 +606,23 @@ async function deleteAccount(groupId, accountId, accountName) {
     }
 }
 
-// ─── Analyzer ────────────────────────────────────────────────────────────────
+// ─── Analyzer ─────────────────────────────────────────────────────────────────
 
 async function analyze() {
-    const select    = document.getElementById("accountSelect");
-    const region    = document.getElementById("region").value;
-    const errorBox  = document.getElementById("error-box");
+    const select   = document.getElementById("accountSelect");
+    const region   = document.getElementById("region").value;
+    const errorBox = document.getElementById("error-box");
     errorBox.style.display = "none";
 
-    if (!isTokenValid()) {
-        clearTokens();
-        showAuthScreen("login");
-        return;
-    }
+    if (!isTokenValid()) { clearTokens(); showAuthScreen("login"); return; }
 
-    if (!select.value) {
+    if (!document.getElementById("accountSelect").value) {
         errorBox.textContent = "Selecciona una cuenta para analizar.";
         errorBox.style.display = "block";
         return;
     }
 
-    const acc = JSON.parse(select.value);
+    const acc = JSON.parse(document.getElementById("accountSelect").value);
     setLoading(true);
     try {
         const response = await fetch(`${API_URL}/analyze`, {
@@ -542,10 +671,10 @@ function showResults(data) {
     const downloadLinks = document.getElementById("downloadLinks");
     downloadLinks.innerHTML = "";
     const fileLabels = {
-        [`infra_${data.region}.json`]:          "📄 JSON",
-        [`documentation_${data.region}.md`]:    "📄 Documentación (.md)",
-        [`suggestions_${data.region}.md`]:      "💡 Sugerencias (.md)",
-        [`diagram_${data.region}.drawio`]:      "🏗️ Diagrama draw.io",
+        [`infra_${data.region}.json`]:       "📄 JSON",
+        [`documentation_${data.region}.md`]: "📄 Documentación (.md)",
+        [`suggestions_${data.region}.md`]:   "💡 Sugerencias (.md)",
+        [`diagram_${data.region}.drawio`]:   "🏗️ Diagrama draw.io",
     };
     for (const [filename, url] of Object.entries(data.downloads)) {
         const label = fileLabels[filename] || filename;
@@ -558,7 +687,7 @@ function showResults(data) {
     setLoading(false);
 }
 
-// ─── History ─────────────────────────────────────────────────────────────────
+// ─── History ──────────────────────────────────────────────────────────────────
 
 async function loadHistory() {
     const container = document.getElementById("history-container");
@@ -570,7 +699,6 @@ async function loadHistory() {
         if (response.status === 401) { clearTokens(); showAuthScreen("login"); return; }
         const data = await response.json();
         renderHistory(data.groups || []);
-
     } catch (err) {
         container.innerHTML = `<p style="color:#f472b6; font-size:14px;">Error al cargar el historial.</p>`;
     }
@@ -578,96 +706,277 @@ async function loadHistory() {
 
 function renderHistory(groups) {
     const container = document.getElementById("history-container");
+
     if (!groups || groups.length === 0) {
-        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay análisis registrados aún.</p>`;
+        container.innerHTML = `
+            <div style="text-align:center; padding:48px 24px;">
+                <div style="font-size:40px; margin-bottom:12px;">📭</div>
+                <p style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0 0 6px;">Sin análisis registrados</p>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Los análisis completados aparecerán aquí automáticamente.</p>
+            </div>`;
         return;
     }
 
-    const thStyle = `padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; border-bottom:1px solid var(--border);`;
+    // Agrupar por group_name
+    const byGroup = {};
+    groups.forEach(g => {
+        const key = g.group_name || g.account_id;
+        if (!byGroup[key]) byGroup[key] = { group_name: key, color: g.color, items: [] };
+        byGroup[key].items.push(g);
+    });
 
-    const rows = groups.map(g => {
-        const color      = g.color || "#0166ff";
-        const colorAlpha = color + "22";
-        const latest     = g.analyses[0];
-        const latestDate = new Date(latest.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
-        const age        = (Date.now() - new Date(latest.timestamp).getTime()) / (1000 * 60 * 60 * 24);
-        const expired    = age > 30;
-        const groupKey   = `${g.account_id}_${g.region}`;
+    // Ordenar grupos por timestamp más reciente
+    const sortedGroups = Object.values(byGroup).sort((a, b) => {
+        const aLatest = a.items[0]?.analyses[0]?.timestamp || "";
+        const bLatest = b.items[0]?.analyses[0]?.timestamp || "";
+        return bLatest.localeCompare(aLatest);
+    });
 
-        const latestDownload = expired
-            ? `<span style="color:var(--text-secondary); font-size:12px;">Expirado</span>`
-            : `<a onclick="redownload('${g.s3_prefix}', '${g.region}')" style="color:${color}; cursor:pointer; font-size:13px; font-weight:500;">📥 Ver archivos</a>`;
-
-        const hasHistory = g.analyses.length > 1;
-        const toggleBtn  = hasHistory
-            ? `<button onclick="toggleHistory('${groupKey}')" id="toggle-${groupKey}" style="background:none; border:1px solid ${color}44; color:${color}; padding:4px 10px; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">▼ ${g.analyses.length - 1} anterior${g.analyses.length - 1 > 1 ? "es" : ""}</button>`
-            : "";
-
-        const historyRows = g.analyses.slice(1).map(a => {
-            const d   = new Date(a.timestamp).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
-            return `<tr style="background:${colorAlpha}; border-bottom:1px solid ${color}22;">
-                <td style="padding:8px 16px; border-left:4px solid ${color}66;"></td>
-                <td style="padding:8px 16px;"></td>
-                <td style="padding:8px 16px; font-size:12px; color:var(--text-secondary); white-space:nowrap;">${d}</td>
-                <td style="padding:8px 16px; font-size:12px; color:var(--text-secondary);">${a.user_email || "—"}</td>
-                <td style="padding:8px 16px;"></td>
-            </tr>`;
-        }).join("");
-
-        const historyPanel = hasHistory
-            ? `<tr id="history-panel-${groupKey}" style="display:none;">
-                <td colspan="5" style="padding:0; background:${colorAlpha};">
-                    <div style="padding:6px 16px; border-top:1px solid ${color}33;">
-                        <span style="font-size:11px; font-weight:600; color:${color}; text-transform:uppercase; letter-spacing:.05em;">Análisis anteriores</span>
-                    </div>
-                    <table style="width:100%; border-collapse:collapse;">${historyRows}</table>
-                </td>
-            </tr>`
-            : "";
-
-        return `
-        <tr style="border-bottom:1px solid ${color}33; border-left:4px solid ${color}; background:${colorAlpha};">
-            <td style="padding:14px 16px;">
-                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0;">${g.account_name}</p>
-                <p style="font-size:11px; color:var(--text-secondary); margin:2px 0 0;">${g.group_name} · ${g.account_id}</p>
-            </td>
-            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${g.region}</td>
-            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${latestDate}</td>
-            <td style="padding:14px 16px; font-size:13px; color:var(--text-secondary); white-space:nowrap;">${latest.user_email || "—"}</td>
-            <td style="padding:14px 16px; white-space:nowrap;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                    ${latestDownload}
-                    ${toggleBtn}
-                </div>
-            </td>
-        </tr>
-        ${historyPanel}`;
-    }).join("");
+    // Obtener regiones únicas para el filtro
+    const allRegions = [...new Set(groups.map(g => g.region))].sort();
 
     container.innerHTML = `
-        <table style="width:100%; border-collapse:collapse;">
-            <thead>
-                <tr>
-                    <th style="${thStyle}">Cuenta</th>
-                    <th style="${thStyle}">Región</th>
-                    <th style="${thStyle}">Último análisis</th>
-                    <th style="${thStyle}">Analizado por</th>
-                    <th style="${thStyle}">Archivos</th>
-                </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>`;
+        <!-- Barra de filtros -->
+        <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+            <div style="position:relative; flex:1; min-width:200px;">
+                <input id="hist-search" type="text" placeholder="Buscar por cuenta, grupo o Account ID..."
+                       oninput="filterHistory()"
+                       style="width:100%; background:#060d1a; border:1px solid var(--border); border-radius:8px;
+                              padding:9px 14px 9px 36px; color:var(--text-primary); font-size:13px; outline:none;
+                              transition:border-color .2s; box-sizing:border-box;"
+                       onfocus="this.style.borderColor='var(--accent-blue)'"
+                       onblur="this.style.borderColor='var(--border)'">
+                <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary); font-size:13px; pointer-events:none;">🔍</span>
+            </div>
+            <select id="hist-region" onchange="filterHistory()"
+                    style="background:#060d1a; border:1px solid var(--border); border-radius:8px;
+                           padding:9px 14px; color:var(--text-primary); font-size:13px; outline:none; cursor:pointer;">
+                <option value="">Todas las regiones</option>
+                ${allRegions.map(r => `<option value="${r}">${r}</option>`).join("")}
+            </select>
+        </div>
+
+        <!-- Contador -->
+        <div id="hist-counter" style="font-size:12px; color:var(--text-secondary); margin-bottom:16px;"></div>
+
+        <!-- Grupos -->
+        <div id="hist-groups"></div>`;
+
+    // Guardar datos para el filtro
+    window._historyGroups = sortedGroups;
+    filterHistory();
+}
+
+function filterHistory() {
+    const q       = (document.getElementById("hist-search")?.value || "").toLowerCase();
+    const region  = document.getElementById("hist-region")?.value || "";
+    const groups  = window._historyGroups || [];
+    const counter = document.getElementById("hist-counter");
+    const container = document.getElementById("hist-groups");
+
+    let totalAccounts = 0;
+
+    const html = groups.map(group => {
+        // Filtrar cuentas dentro del grupo
+        const filtered = group.items.filter(g => {
+            const matchText = !q ||
+                g.account_name.toLowerCase().includes(q) ||
+                g.group_name.toLowerCase().includes(q) ||
+                g.account_id.includes(q);
+            const matchRegion = !region || g.region === region;
+            return matchText && matchRegion;
+        });
+
+        if (!filtered.length) return "";
+        totalAccounts += filtered.length;
+
+        const color      = group.color || "#0166ff";
+        const colorAlpha = color + "18";
+        const colorBorder= color + "44";
+        const groupKey   = `hg-${group.group_name.replace(/\s+/g, "_")}`;
+        const latestTs   = filtered[0]?.analyses[0]?.timestamp || "";
+        const latestDate = latestTs ? _timeAgo(latestTs) : "—";
+
+        const accountCards = filtered.map(g => {
+            const latest   = g.analyses[0];
+            const date     = new Date(latest.timestamp).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+            const age      = (Date.now() - new Date(latest.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+            const expired  = age > 30;
+            const daysLeft = Math.max(0, Math.ceil(30 - age));
+            const accKey   = `ha-${g.account_id}_${g.region}`;
+
+            const dlBtns = expired
+                ? `<span style="font-size:12px; color:var(--text-secondary); background:rgba(255,255,255,0.04);
+                                border:1px solid var(--border); padding:5px 12px; border-radius:6px;">⏱️ Archivos expirados</span>`
+                : `<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    ${[
+                        { key: "json",    icon: "📊", label: "JSON"        },
+                        { key: "docs",    icon: "📄", label: "Docs"        },
+                        { key: "suggest", icon: "💡", label: "Sugerencias" },
+                        { key: "drawio",  icon: "🏗️", label: "Diagrama"    },
+                    ].map(f => `
+                    <a onclick="downloadFile('${g.s3_prefix}', '${g.region}', '${f.key}')"
+                       style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:500;
+                              background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text-primary);
+                              padding:5px 11px; border-radius:6px; cursor:pointer; text-decoration:none; transition:all .15s;"
+                       onmouseover="this.style.background='rgba(1,102,255,0.12)'; this.style.borderColor='${color}66';"
+                       onmouseout="this.style.background='rgba(255,255,255,0.04)'; this.style.borderColor='var(--border)';">
+                        ${f.icon} ${f.label}
+                    </a>`).join("")}
+                    <span style="font-size:11px; color:var(--text-secondary); margin-left:2px;">⏳ ${daysLeft}d</span>
+                   </div>`;
+
+            const prevAnalyses = g.analyses.slice(1);
+            const prevSection  = prevAnalyses.length > 0 ? `
+                <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+                    <button onclick="toggleHistoryCard('${accKey}')" id="btn-${accKey}"
+                            style="background:none; border:none; color:var(--text-secondary); font-size:12px;
+                                   cursor:pointer; display:flex; align-items:center; gap:5px; padding:0;"
+                            onmouseover="this.style.color='var(--text-primary)'"
+                            onmouseout="this.style.color='var(--text-secondary)'">
+                        <span id="arrow-${accKey}" style="font-size:10px; transition:transform .2s; display:inline-block;">▶</span>
+                        ${prevAnalyses.length} análisis anterior${prevAnalyses.length > 1 ? "es" : ""}
+                    </button>
+                    <div id="prev-${accKey}" style="display:none; flex-direction:column; gap:6px; margin-top:8px;">
+                        ${prevAnalyses.map(a => {
+                            const d    = new Date(a.timestamp).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+                            const aAge = (Date.now() - new Date(a.timestamp).getTime()) / (1000 * 60 * 60 * 24);
+                            return `
+                            <div style="display:flex; align-items:center; justify-content:space-between;
+                                        padding:7px 12px; background:rgba(255,255,255,0.02);
+                                        border-radius:7px; border:1px solid var(--border);">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <span style="font-size:12px; color:var(--text-secondary);">📅 ${d}</span>
+                                    <span style="font-size:12px; color:var(--text-secondary);">·</span>
+                                    <span style="font-size:12px; color:var(--text-secondary);">👤 ${a.user_email || "—"}</span>
+                                </div>
+                                ${aAge > 30
+                                    ? `<span style="font-size:11px; color:var(--text-secondary);">Expirado</span>`
+                                    : `<button onclick="redownload('${g.s3_prefix}', '${g.region}')"
+                                              style="font-size:11px; background:rgba(1,102,255,0.1); border:1px solid rgba(1,102,255,0.3);
+                                                     color:#60a5fa; padding:3px 10px; border-radius:6px; cursor:pointer;">
+                                           Ver archivos
+                                       </button>`}
+                            </div>`;
+                        }).join("")}
+                    </div>
+                </div>` : "";
+
+            return `
+            <div style="background:#0a0f1e; border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-bottom:10px;">
+                <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+                            <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${g.account_name}</span>
+                            <span style="font-size:11px; background:${color}22; color:${color}; border:1px solid ${color}44;
+                                         padding:1px 8px; border-radius:10px; font-weight:500;">${g.region}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-size:11px; font-family:monospace; color:var(--text-secondary);">${g.account_id}</span>
+                            <span style="font-size:11px; color:var(--text-secondary);">·</span>
+                            <span style="font-size:12px; color:var(--text-secondary);">📅 ${date}</span>
+                            <span style="font-size:11px; color:var(--text-secondary);">·</span>
+                            <span style="font-size:12px; color:var(--text-secondary);">👤 ${latest.user_email || "—"}</span>
+                        </div>
+                    </div>
+                    <span style="font-size:11px; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;
+                                 background:rgba(255,255,255,0.04); border:1px solid var(--border);
+                                 padding:2px 8px; border-radius:10px;">
+                        ${g.analyses.length} análisis
+                    </span>
+                </div>
+                ${dlBtns}
+                ${prevSection}
+            </div>`;
+        }).join("");
+
+        return `
+        <div style="margin-bottom:12px; border:1px solid ${colorBorder}; border-radius:12px; overflow:hidden;">
+
+            <!-- Cabecera del grupo — clickable -->
+            <div onclick="toggleHistGroup('${groupKey}')"
+                 style="display:flex; align-items:center; gap:10px; padding:14px 18px;
+                        background:${colorAlpha}; border-left:4px solid ${color};
+                        cursor:pointer; user-select:none;">
+                <span id="garrow-${groupKey}" style="font-size:11px; color:${color}; transition:transform .2s; display:inline-block;">▶</span>
+                <span style="font-size:15px; font-weight:700; color:var(--text-primary); flex:1;">${group.group_name}</span>
+                <span style="font-size:12px; color:var(--text-secondary);">${filtered.length} cuenta${filtered.length !== 1 ? "s" : ""}</span>
+                <span style="font-size:11px; color:var(--text-secondary);">·</span>
+                <span style="font-size:12px; color:var(--text-secondary);">Último: ${latestDate}</span>
+            </div>
+
+            <!-- Cuentas del grupo — cerrado por defecto -->
+            <div id="${groupKey}" style="display:none; padding:12px 14px;">
+                ${accountCards}
+            </div>
+        </div>`;
+    }).join("");
+
+    const visible = html.replace(/<div style="margin-bottom:12px[^"]*"[^>]*>\s*<\/div>/g, "").trim();
+    container.innerHTML = html || `
+        <div style="text-align:center; padding:32px;">
+            <p style="font-size:14px; color:var(--text-secondary);">Sin resultados para los filtros aplicados.</p>
+        </div>`;
+
+    const total = groups.reduce((s, g) => s + g.items.length, 0);
+    if (counter) counter.textContent = `${totalAccounts} cuenta${totalAccounts !== 1 ? "s" : ""} · ${total} análisis en total`;
+}
+
+function toggleHistGroup(groupKey) {
+    const panel = document.getElementById(groupKey);
+    const arrow = document.getElementById(`garrow-${groupKey}`);
+    const open  = panel.style.display !== "none";
+    panel.style.display   = open ? "none" : "block";
+    arrow.style.transform = open ? "" : "rotate(90deg)";
+}
+
+function toggleHistoryCard(accKey) {
+    const panel = document.getElementById(`prev-${accKey}`);
+    const arrow = document.getElementById(`arrow-${accKey}`);
+    const open  = panel.style.display !== "none";
+    panel.style.display   = open ? "none" : "flex";
+    arrow.style.transform = open ? "" : "rotate(90deg)";
+}
+
+function _timeAgo(isoString) {
+    const diff = Date.now() - new Date(isoString).getTime();
+    const mins  = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days  = Math.floor(diff / 86400000);
+    if (mins  < 60)  return `hace ${mins}m`;
+    if (hours < 24)  return `hace ${hours}h`;
+    if (days  < 30)  return `hace ${days}d`;
+    return new Date(isoString).toLocaleDateString("es-ES");
 }
 
 
-function toggleHistory(groupKey) {
-    const panel  = document.getElementById(`history-panel-${groupKey}`);
-    const btn    = document.getElementById(`toggle-${groupKey}`);
-    const open   = panel.style.display !== "none";
-    panel.style.display = open ? "none" : "table-row";
-    const count  = btn.textContent.match(/\d+/)?.[0] || "";
-    const label  = count ? `${count} anterior${parseInt(count) > 1 ? "es" : ""}` : "anteriores";
-    btn.textContent = open ? `▼ ${label}` : `▲ ${label}`;
+function toggleHistoryCard(groupKey) {
+    const panel = document.getElementById(`prev-${groupKey}`);
+    const arrow = document.getElementById(`arrow-${groupKey}`);
+    const btn   = document.getElementById(`btn-${groupKey}`);
+    const open  = panel.style.display !== "none";
+    panel.style.display  = open ? "none" : "flex";
+    arrow.style.transform = open ? "" : "rotate(90deg)";
+}
+
+async function downloadFile(s3Prefix, region, fileKey) {
+    const keyMap = {
+        json:    `infra_${region}.json`,
+        docs:    `documentation_${region}.md`,
+        suggest: `suggestions_${region}.md`,
+        drawio:  `diagram_${region}.drawio`,
+    };
+    try {
+        const res  = await fetch(`${API_URL}/status/${s3Prefix}`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        const url  = data.downloads?.[keyMap[fileKey]];
+        if (url) window.open(url, "_blank");
+        else alert("Archivo no disponible.");
+    } catch {
+        alert("Error al obtener el archivo.");
+    }
 }
 
 
@@ -688,10 +997,10 @@ async function redownload(analysisId, region) {
         }
 
         const fileLabels = {
-            [`infra_${region}.json`]:          { label: "Inventario JSON",          icon: "📊" },
-            [`documentation_${region}.md`]:    { label: "Documentación técnica",    icon: "📄" },
-            [`suggestions_${region}.md`]:      { label: "Sugerencias Well-Arch.",   icon: "💡" },
-            [`diagram_${region}.drawio`]:      { label: "Diagrama draw.io",         icon: "🏗️" },
+            [`infra_${region}.json`]:       { label: "Inventario JSON",        icon: "📊" },
+            [`documentation_${region}.md`]: { label: "Documentación técnica",  icon: "📄" },
+            [`suggestions_${region}.md`]:   { label: "Sugerencias Well-Arch.", icon: "💡" },
+            [`diagram_${region}.drawio`]:   { label: "Diagrama draw.io",       icon: "🏗️" },
         };
 
         const items = Object.entries(data.downloads).map(([filename, url]) => {
@@ -718,15 +1027,122 @@ async function redownload(analysisId, region) {
     }
 }
 
-function downloadAll(urls) {
-    urls.forEach(url => window.open(url, "_blank"));
-}
+function downloadAll(urls) { urls.forEach(url => window.open(url, "_blank")); }
 
 function closeDownloadsModal() {
     document.getElementById("downloads-modal").style.display = "none";
 }
 
-// ─── UI helpers ──────────────────────────────────────────────────────────────
+// ─── Service Profile ──────────────────────────────────────────────────────────
+
+let _profileGroupId = null;
+
+async function openProfile(groupId, groupName) {
+    _profileGroupId = groupId;
+    document.getElementById("profile-modal-title").textContent = groupName;
+    document.getElementById("profile-view").style.display = "block";
+    document.getElementById("profile-edit").style.display = "none";
+    document.getElementById("profile-modal").style.display = "flex";
+    document.getElementById("profile-loading").style.display = "block";
+    document.getElementById("profile-view-content").style.display = "none";
+
+    try {
+        const res  = await fetch(`${API_URL}/profiles/${groupId}`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        const profile = data.profile || {};
+        _profilesCache[groupId] = profile;
+        _renderProfileView(profile);
+    } catch {
+        document.getElementById("profile-loading").textContent = "Error al cargar el perfil.";
+    }
+}
+
+function _renderProfileView(p) {
+    document.getElementById("profile-loading").style.display = "none";
+    document.getElementById("profile-view-content").style.display = "block";
+
+    const cmcColors = { esencial: "#6B7280", avanzado: "#0166ff", gestionado: "#10b981" };
+    const cmcLabels = { esencial: "Esencial", avanzado: "Avanzado", gestionado: "Gestionado" };
+    const level = p.cmc_level || "";
+    const color = cmcColors[level] || "#6B7280";
+
+    document.getElementById("pv-cmc").innerHTML = level
+        ? `<span style="background:${color}22; color:${color}; border:1px solid ${color}44; padding:3px 12px; border-radius:20px; font-size:13px; font-weight:600;">${cmcLabels[level]}</span>`
+        : `<span style="color:var(--text-secondary); font-size:13px;">No definido</span>`;
+
+    document.getElementById("pv-identity").textContent = p.identity || "—";
+    document.getElementById("pv-cicd").textContent     = (p.cicd || []).join(", ") || "—";
+    document.getElementById("pv-iac").textContent      = p.iac || "—";
+    document.getElementById("pv-monitoring").textContent = p.monitoring ? "Telefónica" : "—";
+
+    const runbook = p.runbook || "";
+    document.getElementById("pv-runbook").innerHTML = runbook
+        ? marked.parse(runbook)
+        : `<p style="color:var(--text-secondary); font-size:13px;">Sin runbook definido.</p>`;
+
+    document.getElementById("profile-modal")._data = p;
+}
+
+function openProfileEdit() {
+    const p = document.getElementById("profile-modal")._data || {};
+    document.getElementById("profile-view").style.display = "none";
+    document.getElementById("profile-edit").style.display = "block";
+
+    document.querySelectorAll("input[name='pe-cmc']").forEach(r => r.checked = r.value === (p.cmc_level || ""));
+    document.getElementById("pe-identity").value = p.identity || "";
+    document.getElementById("pe-iac").value       = p.iac || "";
+
+    document.querySelectorAll("input[name='pe-cicd']").forEach(cb => {
+        cb.checked = (p.cicd || []).includes(cb.value);
+    });
+
+    document.getElementById("pe-monitoring").checked = !!p.monitoring;
+    document.getElementById("pe-runbook").value = p.runbook || "";
+}
+
+function closeProfileEdit() {
+    document.getElementById("profile-view").style.display = "block";
+    document.getElementById("profile-edit").style.display = "none";
+}
+
+async function saveProfile() {
+    const cmc_level  = document.querySelector("input[name='pe-cmc']:checked")?.value || "";
+    const identity   = document.getElementById("pe-identity").value;
+    const iac        = document.getElementById("pe-iac").value;
+    const cicd       = [...document.querySelectorAll("input[name='pe-cicd']:checked")].map(c => c.value);
+    const monitoring = document.getElementById("pe-monitoring").checked;
+    const runbook    = document.getElementById("pe-runbook").value;
+
+    const btn = document.getElementById("profile-save-btn");
+    btn.disabled = true; btn.textContent = "Guardando...";
+
+    try {
+        const res = await fetch(`${API_URL}/profiles/${_profileGroupId}`, {
+            method:  "PUT",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+            body:    JSON.stringify({ cmc_level, identity, iac, cicd, monitoring, runbook }),
+        });
+        if (!res.ok) throw new Error("Error al guardar");
+        const p = { cmc_level, identity, iac, cicd, monitoring, runbook };
+        _profilesCache[_profileGroupId] = p;
+        document.getElementById("profile-modal")._data = p;
+        _renderProfileView(p);
+        closeProfileEdit();
+        renderAccounts(_accountsData);
+    } catch {
+        alert("Error al guardar el perfil.");
+    } finally {
+        btn.disabled = false; btn.textContent = "Guardar";
+    }
+}
+
+function closeProfileModal() {
+    document.getElementById("profile-modal").style.display = "none";
+}
+
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 
 function switchTab(tab) {
     document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
@@ -743,9 +1159,9 @@ function resetForm() {
 }
 
 function setLoading(loading) {
-    document.getElementById("btnText").style.display     = loading ? "none" : "flex";
-    document.getElementById("btnLoading").style.display  = loading ? "flex" : "none";
-    document.getElementById("submitBtn").disabled        = loading;
+    document.getElementById("btnText").style.display    = loading ? "none" : "flex";
+    document.getElementById("btnLoading").style.display = loading ? "flex" : "none";
+    document.getElementById("submitBtn").disabled       = loading;
 }
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }

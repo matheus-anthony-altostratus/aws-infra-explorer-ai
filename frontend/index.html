@@ -541,7 +541,7 @@
                 <!-- Stats -->
                 <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;">
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">16</p>
+                        <p style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">17</p>
                         <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Servicios analizados</p>
                     </div>
                     <div class="stat-card">
@@ -553,8 +553,8 @@
                         <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Outputs generados</p>
                     </div>
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">0</p>
-                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Access Keys usadas</p>
+                        <p style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">7</p>
+                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Pestañas en diagrama</p>
                     </div>
                 </div>
 
@@ -642,9 +642,13 @@
 
                         <div style="margin-bottom:16px;">
                             <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Cuenta</label>
-                            <select id="accountSelect" class="input-field" onchange="onAccountSelect()">
-                                <option value="">— Selecciona una cuenta —</option>
-                            </select>
+                            <div style="position:relative;">
+                                <input id="accountSearch" type="text" class="input-field" placeholder="Buscar cuenta por nombre o grupo..." autocomplete="off" oninput="filterAccounts()" onfocus="showAccountDropdown()" onblur="hideAccountDropdown()" style="padding-right:36px;">
+                                <span style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-secondary); pointer-events:none; font-size:12px;">▾</span>
+                                <div id="accountDropdown" style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; background:#111827; border:1px solid var(--border); border-radius:10px; max-height:240px; overflow-y:auto; z-index:50; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+                                </div>
+                            </div>
+                            <input type="hidden" id="accountSelect">
                             <p style="font-size:12px; color:var(--text-secondary); margin:6px 0 0;">
                                 ¿No ves la cuenta? <a onclick="navigate('accounts')" style="color:#60a5fa; cursor:pointer;">Regístrala primero →</a>
                             </p>
@@ -756,6 +760,112 @@
                     <div id="downloads-modal-content"></div>
                 </div>
             </div>
+            <!-- ===== MODAL: SERVICE PROFILE ===== -->
+            <div id="profile-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
+                <div style="background:#111827; border:1px solid var(--border); border-radius:16px; width:100%; max-width:620px; margin:24px; max-height:90vh; overflow-y:auto;">
+
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:24px 28px 0;">
+                        <div>
+                            <p style="font-size:11px; font-weight:600; color:#34d399; text-transform:uppercase; letter-spacing:.08em; margin:0 0 4px;">Service Profile</p>
+                            <h2 id="profile-modal-title" style="font-size:18px; font-weight:600; margin:0; color:var(--text-primary);"></h2>
+                        </div>
+                        <button onclick="closeProfileModal()" style="background:none; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer;">×</button>
+                    </div>
+
+                    <!-- Vista -->
+                    <div id="profile-view" style="padding:24px 28px;">
+                        <div id="profile-loading" style="color:var(--text-secondary); font-size:14px;">Cargando...</div>
+                        <div id="profile-view-content" style="display:none;">
+                            <div style="display:grid; grid-template-columns:130px 1fr; gap:10px 16px; margin-bottom:24px; align-items:start;">
+                                <span style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; padding-top:3px;">Nivel CMC</span>
+                                <div id="pv-cmc"></div>
+                                <span style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Identidad</span>
+                                <span id="pv-identity" style="font-size:13px; color:var(--text-primary);"></span>
+                                <span style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">IaC</span>
+                                <span id="pv-iac" style="font-size:13px; color:var(--text-primary);"></span>
+                                <span style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">CI/CD</span>
+                                <span id="pv-cicd" style="font-size:13px; color:var(--text-primary);"></span>
+                                <span style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em;">Monitorización</span>
+                                <span id="pv-monitoring" style="font-size:13px; color:var(--text-primary);"></span>
+                            </div>
+                            <div style="border-top:1px solid var(--border); padding-top:20px;">
+                                <p style="font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin:0 0 12px;">Runbook operativo</p>
+                                <div id="pv-runbook" class="markdown-body" style="font-size:13px;"></div>
+                            </div>
+                            <div style="margin-top:24px; display:flex; justify-content:flex-end;">
+                                <button onclick="openProfileEdit()" style="font-size:13px; background:rgba(1,102,255,0.15); border:1px solid rgba(1,102,255,0.3); color:#60a5fa; padding:8px 20px; border-radius:8px; cursor:pointer; font-weight:500;">✏️ Editar perfil</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edición -->
+                    <div id="profile-edit" style="display:none; padding:24px 28px;">
+
+                        <div style="margin-bottom:18px;">
+                            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">Nivel CMC</label>
+                            <div style="display:flex; gap:16px;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="radio" name="pe-cmc" value="esencial"> Esencial</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="radio" name="pe-cmc" value="avanzado"> Avanzado</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="radio" name="pe-cmc" value="gestionado"> Gestionado</label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:18px;">
+                            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">Identidad y acceso</label>
+                            <select id="pe-identity" class="input-field">
+                                <option value="">— Selecciona —</option>
+                                <option value="IAM">IAM clásico</option>
+                                <option value="Identity Center (SSO)">IAM Identity Center (SSO)</option>
+                                <option value="Organizations + Identity Center">AWS Organizations + Identity Center</option>
+                                <option value="Office 365 + MFA">Office 365 + MFA</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom:18px;">
+                            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">IaC</label>
+                            <select id="pe-iac" class="input-field">
+                                <option value="">— Selecciona —</option>
+                                <option value="Terraform">Terraform</option>
+                                <option value="CloudFormation">CloudFormation</option>
+                                <option value="CDK">AWS CDK</option>
+                                <option value="Manual">Manual (sin IaC)</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom:18px;">
+                            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">CI/CD</label>
+                            <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="checkbox" name="pe-cicd" value="GitHub Actions"> GitHub Actions</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="checkbox" name="pe-cicd" value="GitLab CI"> GitLab CI</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="checkbox" name="pe-cicd" value="Jenkins"> Jenkins</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="checkbox" name="pe-cicd" value="Bitbucket + Jenkins"> Bitbucket + Jenkins</label>
+                                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; color:var(--text-primary);"><input type="checkbox" name="pe-cicd" value="CodePipeline"> AWS CodePipeline</label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:18px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="pe-monitoring">
+                                <span style="font-size:13px; color:var(--text-primary);">Monitorización gestionada por Telefónica</span>
+                            </label>
+                        </div>
+
+                        <div style="margin-bottom:24px;">
+                            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">
+                                Runbook operativo
+                                <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#6B7280; font-size:11px; margin-left:6px;">Markdown soportado</span>
+                            </label>
+                            <textarea id="pe-runbook" class="input-field" rows="12" placeholder="## Acceso&#10;- VPN obligatoria antes de cualquier acción&#10;- Consola AWS solo via Office 365 + MFA&#10;&#10;## Flujo para atender un ticket&#10;1. Crear rama desde dev con el nombre del ticket (ej: SCTASK0000123456)&#10;2. Hacer cambios en Terraform desde esa rama&#10;3. Push + merge SCTASK → dev en Bitbucket&#10;4. Jenkins detecta cambios → validar outputs → aprobar apply&#10;5. Verificar cambios en consola AWS&#10;6. Pull request dev → prod en Bitbucket&#10;   Título: descripción → SCTASK0000123456&#10;7. Validar logs Jenkins en dev y prod" style="font-family:monospace; font-size:12px; resize:vertical;"></textarea>
+                        </div>
+
+                        <div style="display:flex; gap:10px; justify-content:flex-end;">
+                            <button onclick="closeProfileEdit()" class="btn-secondary">Cancelar</button>
+                            <button id="profile-save-btn" onclick="saveProfile()" class="btn-primary" style="width:auto; padding:10px 24px;">Guardar</button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
 
             <!-- ===== MODAL: CUENTA ===== -->
             <div id="account-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
@@ -801,6 +911,14 @@
                             <label style="cursor:pointer;" title="#06b6d4"><input type="radio" name="acc-color" value="#06b6d4" style="display:none;"><span class="color-swatch" style="background:#06b6d4;"></span></label>
                             <label style="cursor:pointer;" title="#ef4444"><input type="radio" name="acc-color" value="#ef4444" style="display:none;"><span class="color-swatch" style="background:#ef4444;"></span></label>
                             <label style="cursor:pointer;" title="#f97316"><input type="radio" name="acc-color" value="#f97316" style="display:none;"><span class="color-swatch" style="background:#f97316;"></span></label>
+                            <label style="cursor:pointer;" title="#84cc16"><input type="radio" name="acc-color" value="#84cc16" style="display:none;"><span class="color-swatch" style="background:#84cc16;"></span></label>
+                            <label style="cursor:pointer;" title="#14b8a6"><input type="radio" name="acc-color" value="#14b8a6" style="display:none;"><span class="color-swatch" style="background:#14b8a6;"></span></label>
+                            <label style="cursor:pointer;" title="#e879f9"><input type="radio" name="acc-color" value="#e879f9" style="display:none;"><span class="color-swatch" style="background:#e879f9;"></span></label>
+                            <label style="cursor:pointer;" title="#fb7185"><input type="radio" name="acc-color" value="#fb7185" style="display:none;"><span class="color-swatch" style="background:#fb7185;"></span></label>
+                            <label style="cursor:pointer;" title="#fbbf24"><input type="radio" name="acc-color" value="#fbbf24" style="display:none;"><span class="color-swatch" style="background:#fbbf24;"></span></label>
+                            <label style="cursor:pointer;" title="#a3e635"><input type="radio" name="acc-color" value="#a3e635" style="display:none;"><span class="color-swatch" style="background:#a3e635;"></span></label>
+                            <label style="cursor:pointer;" title="#38bdf8"><input type="radio" name="acc-color" value="#38bdf8" style="display:none;"><span class="color-swatch" style="background:#38bdf8;"></span></label>
+                            <label style="cursor:pointer;" title="#c084fc"><input type="radio" name="acc-color" value="#c084fc" style="display:none;"><span class="color-swatch" style="background:#c084fc;"></span></label>
                         </div>
                     </div>
 

@@ -15,7 +15,7 @@ OUTPUTS_BUCKET = os.environ["OUTPUTS_BUCKET"]
 FUNCTION_NAME  = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "")
 ACCOUNTS_TABLE = os.environ.get("ACCOUNTS_TABLE", "infra-explorer-accounts")
 HISTORY_TABLE  = os.environ.get("HISTORY_TABLE",  "infra-explorer-history")
-
+NOTION_TOKEN   = os.environ.get("NOTION_TOKEN", "")
 
 # ─── Router ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,8 @@ def handler(event, context):
         return _handle_profile_get(event)
     elif route_key == "PUT /profiles/{group_id}":
         return _handle_profile_put(event)
+    elif route_key == "POST /notion/{s3_prefix}":
+        return _handle_notion(event)
     else:
         return _response(404, {"error": "Not found"})
 
@@ -422,12 +424,13 @@ def _handle_profile_get(event):
         if not item:
             return _response(200, {"profile": {}})
         return _response(200, {"profile": {
-            "cmc_level":       item.get("cmc_level", ""),
-            "identity":        item.get("identity", ""),
-            "cicd":            item.get("cicd", []),
-            "containers":      item.get("containers", []),
-            "observability":   item.get("observability", []),
-            "runbook":         item.get("runbook", ""),
+            "cmc_level":      item.get("cmc_level", ""),
+            "identity":       item.get("identity", ""),
+            "cicd":           item.get("cicd", []),
+            "containers":     item.get("containers", []),
+            "observability":  item.get("observability", []),
+            "runbook":        item.get("runbook", ""),
+            "notion_page_id": item.get("notion_page_id", ""),
         }})
     except Exception as e:
         return _response(500, {"error": str(e)})
@@ -440,20 +443,70 @@ def _handle_profile_put(event):
             return _response(400, {"error": "group_id requerido"})
         body = json.loads(event.get("body", "{}"))
         dynamodb.Table(ACCOUNTS_TABLE).put_item(Item={
-            "group_id":      group_id,
-            "account_id":    "PROFILE",
-            "cmc_level":     body.get("cmc_level", ""),
-            "identity":      body.get("identity", ""),
-            "cicd":          body.get("cicd", []),
-            "containers":    body.get("containers", []),
-            "observability": body.get("observability", []),
-            "runbook":       body.get("runbook", ""),
-            "updated_at":    _now_iso(),
+            "group_id":       group_id,
+            "account_id":     "PROFILE",
+            "cmc_level":      body.get("cmc_level", ""),
+            "identity":       body.get("identity", ""),
+            "cicd":           body.get("cicd", []),
+            "containers":     body.get("containers", []),
+            "observability":  body.get("observability", []),
+            "runbook":        body.get("runbook", ""),
+            "notion_page_id": body.get("notion_page_id", ""),
+            "updated_at":     _now_iso(),
         })
         return _response(200, {"saved": True})
     except Exception as e:
         return _response(500, {"error": str(e)})
 
+def _handle_notion(event):
+    try:
+        if not NOTION_TOKEN:
+            return _response(503, {"error": "Notion no está configurado. Añade NOTION_TOKEN en las variables de entorno de Lambda."})
+
+        s3_prefix = event.get("pathParameters", {}).get("s3_prefix")
+        if not s3_prefix:
+            return _response(400, {"error": "s3_prefix requerido"})
+
+        body            = json.loads(event.get("body", "{}"))
+        notion_page_id  = body.get("notion_page_id", "").strip()
+        if not notion_page_id:
+            return _response(400, {"error": "notion_page_id requerido — configúralo en el Service Profile del cliente"})
+
+        # Leer el análisis de S3
+        status = _get_status(s3_prefix)
+        if not status or status.get("status") != "completed":
+            return _response(400, {"error": "El análisis no está completado o no existe"})
+
+        # Generar URL pública temporal del SVG si existe (24h)
+        diagram_url = None
+        svg_key     = f"{s3_prefix}/diagram_summary.svg"
+        try:
+            s3_client.head_object(Bucket=OUTPUTS_BUCKET, Key=svg_key)
+            diagram_url = s3_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": OUTPUTS_BUCKET, "Key": svg_key},
+                ExpiresIn=86400,
+            )
+        except Exception:
+            pass
+
+        from generators.notion_generator import NotionGenerator
+        notion   = NotionGenerator(NOTION_TOKEN)
+        page_url = notion.create_analysis_page(
+            parent_page_id = notion_page_id,
+            account_name   = status.get("account_name", s3_prefix),
+            account_id     = status.get("account_id", ""),
+            region         = status.get("region", ""),
+            user_email     = _get_user_email(event),
+            documentation  = status.get("documentation", ""),
+            suggestions    = status.get("suggestions", ""),
+            diagram_url    = diagram_url,
+        )
+
+        return _response(200, {"url": page_url})
+
+    except Exception as e:
+        return _response(500, {"error": str(e)})
 
 def _response(status_code, body, headers=None):
     return {

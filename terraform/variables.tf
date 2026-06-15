@@ -20,3 +20,10 @@ variable "outputs_bucket_arn" {
   description = "ARN del bucket S3 de outputs (del stack persistent)"
   type        = string
 }
+
+variable "notion_token" {
+  description = "Token de integración de Notion"
+  type        = string
+  default     = ""
+  sensitive   = true
+}

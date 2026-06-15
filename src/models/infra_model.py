@@ -219,6 +219,42 @@ class EKSCluster(CloudResource):
     subnet_ids: List[str] = field(default_factory=list)
     security_groups: List[str] = field(default_factory=list)
 
+@dataclass
+class IAMRole:
+    resource_id:       str
+    name:              str
+    description:       str       = ""
+    created_at:        str       = ""
+    last_used:         str       = ""
+    attached_policies: List[str] = field(default_factory=list)
+
+@dataclass
+class IAMGroup:
+    resource_id:       str
+    name:              str
+    user_count:        int       = 0
+    attached_policies: List[str] = field(default_factory=list)
+
+@dataclass
+class IAMUser:
+    username:          str
+    created_at:        str       = ""
+    last_login:        str       = ""
+    mfa_active:        bool      = False
+    attached_policies: List[str] = field(default_factory=list)
+    groups:            List[str] = field(default_factory=list)
+
+
+@dataclass
+class IAMSummary:
+    roles:           List[IAMRole]  = field(default_factory=list)
+    groups:          List[IAMGroup] = field(default_factory=list)
+    users:           List["IAMUser"] = field(default_factory=list)
+    users_count:     int            = 0
+    mfa_enabled:     bool           = False
+    password_policy: bool           = False
+    account_alias:   str            = ""
+
 
 @dataclass
 class DynamoDBTable(CloudResource):
@@ -254,6 +290,7 @@ class InfrastructureData:
     efs_file_systems: List[EFSFileSystem] = field(default_factory=list)
     eks_clusters: List[EKSCluster] = field(default_factory=list)
     dynamodb_tables: List[DynamoDBTable] = field(default_factory=list)
+    iam_summary:     object               = None
 
 
 @dataclass

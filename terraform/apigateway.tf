@@ -83,6 +83,13 @@ resource "aws_apigatewayv2_route" "profile_put" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+resource "aws_apigatewayv2_route" "notion" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /notion/{s3_prefix}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+
 resource "aws_apigatewayv2_authorizer" "cognito" {
   api_id           = aws_apigatewayv2_api.main.id
   authorizer_type  = "JWT"

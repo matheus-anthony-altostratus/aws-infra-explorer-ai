@@ -385,8 +385,10 @@ function renderAccountDropdown(items) {
         dropdown.innerHTML = `<div style="padding:12px 14px; font-size:13px; color:var(--text-secondary);">Sin resultados</div>`;
         return;
     }
-    dropdown.innerHTML = items.map(a => `
-        <div onmousedown="selectAccount(${JSON.stringify(a.value).replace(/"/g, '"')}, '${a.label.replace(/'/g, "\\'")}')"
+    // Guardar items en variable global para evitar problemas de escapado en HTML
+    window._dropdownItems = items;
+    dropdown.innerHTML = items.map((a, i) => `
+        <div onmousedown="selectAccountByIndex(${i})"
              style="padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .1s;"
              onmouseover="this.style.background='rgba(1,102,255,0.1)'" onmouseout="this.style.background=''">
             <div style="font-size:13px; font-weight:500; color:var(--text-primary);">${a.label}</div>
@@ -394,12 +396,24 @@ function renderAccountDropdown(items) {
         </div>`).join("");
 }
 
+function selectAccountByIndex(i) {
+    const a = window._dropdownItems[i];
+    if (!a) return;
+    document.getElementById("accountSelect").value = a.value;
+    document.getElementById("accountSearch").value = a.label;
+    document.getElementById("accountDropdown").style.display = "none";
+    const acc = JSON.parse(a.value);
+    document.getElementById("region").value = acc.default_region;
+}
+
 function selectAccount(value, label) {
     document.getElementById("accountSelect").value = value;
     document.getElementById("accountSearch").value = label;
     document.getElementById("accountDropdown").style.display = "none";
-    const acc = JSON.parse(value);
-    document.getElementById("region").value = acc.default_region;
+    try {
+        const acc = JSON.parse(value);
+        document.getElementById("region").value = acc.default_region;
+    } catch {}
 }
 
 function clearAccountSelection() {
@@ -824,6 +838,14 @@ function filterHistory() {
                         ${f.icon} ${f.label}
                     </a>`).join("")}
                     <span style="font-size:11px; color:var(--text-secondary); margin-left:2px;">⏳ ${daysLeft}d</span>
+                    <button onclick="sendToNotion('${g.s3_prefix}', '${g.account_id}')"
+                            style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:500;
+                                   background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc;
+                                   padding:5px 11px; border-radius:6px; cursor:pointer; transition:all .15s;"
+                            onmouseover="this.style.background='rgba(99,102,241,0.22)'"
+                            onmouseout="this.style.background='rgba(99,102,241,0.12)'">
+                        📝 Notion
+                    </button>
                    </div>`;
 
             const prevAnalyses = g.analyses.slice(1);
@@ -966,14 +988,28 @@ async function downloadFile(s3Prefix, region, fileKey) {
         suggest: `suggestions_${region}.md`,
         drawio:  `diagram_${region}.drawio`,
     };
+    const filename = keyMap[fileKey];
+    if (!filename) return;
     try {
-        const res  = await fetch(`${API_URL}/status/${s3Prefix}`, {
+        // Pedir URL fresca al backend — regenera la presigned URL en el momento
+        const res  = await fetch(`${API_URL}/download/${s3Prefix}/${filename}`, {
             headers: { "Authorization": `Bearer ${getToken()}` },
+            redirect: "manual",
         });
-        const data = await res.json();
-        const url  = data.downloads?.[keyMap[fileKey]];
-        if (url) window.open(url, "_blank");
-        else alert("Archivo no disponible.");
+        // El endpoint /download devuelve 302 con Location header
+        const url = res.headers.get("location") || res.url;
+        if (url && url.startsWith("http")) {
+            window.open(url, "_blank");
+        } else {
+            // Fallback: leer del status.json
+            const statusRes  = await fetch(`${API_URL}/status/${s3Prefix}`, {
+                headers: { "Authorization": `Bearer ${getToken()}` },
+            });
+            const data = await statusRes.json();
+            const freshUrl = data.downloads?.[filename];
+            if (freshUrl) window.open(freshUrl, "_blank");
+            else alert("Archivo no disponible o expirado.");
+        }
     } catch {
         alert("Error al obtener el archivo.");
     }
@@ -1060,6 +1096,10 @@ async function openProfile(groupId, groupName) {
 }
 
 function _renderProfileView(p) {
+    document.getElementById("pv-notion").textContent = p.notion_page_id
+        ? "✅ Configurado"
+        : "⚠️ No configurado";
+
     document.getElementById("profile-loading").style.display = "none";
     document.getElementById("profile-view-content").style.display = "block";
 
@@ -1100,6 +1140,8 @@ function openProfileEdit() {
 
     document.getElementById("pe-monitoring").checked = !!p.monitoring;
     document.getElementById("pe-runbook").value = p.runbook || "";
+    document.getElementById("pe-notion-page-id").value = p.notion_page_id || "";
+
 }
 
 function closeProfileEdit() {
@@ -1108,12 +1150,13 @@ function closeProfileEdit() {
 }
 
 async function saveProfile() {
-    const cmc_level  = document.querySelector("input[name='pe-cmc']:checked")?.value || "";
-    const identity   = document.getElementById("pe-identity").value;
-    const iac        = document.getElementById("pe-iac").value;
-    const cicd       = [...document.querySelectorAll("input[name='pe-cicd']:checked")].map(c => c.value);
-    const monitoring = document.getElementById("pe-monitoring").checked;
-    const runbook    = document.getElementById("pe-runbook").value;
+    const cmc_level      = document.querySelector("input[name='pe-cmc']:checked")?.value || "";
+    const identity       = document.getElementById("pe-identity").value;
+    const iac            = document.getElementById("pe-iac").value;
+    const cicd           = [...document.querySelectorAll("input[name='pe-cicd']:checked")].map(c => c.value);
+    const monitoring     = document.getElementById("pe-monitoring").checked;
+    const runbook        = document.getElementById("pe-runbook").value;
+    const notion_page_id = document.getElementById("pe-notion-page-id").value.trim();
 
     const btn = document.getElementById("profile-save-btn");
     btn.disabled = true; btn.textContent = "Guardando...";
@@ -1122,10 +1165,10 @@ async function saveProfile() {
         const res = await fetch(`${API_URL}/profiles/${_profileGroupId}`, {
             method:  "PUT",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-            body:    JSON.stringify({ cmc_level, identity, iac, cicd, monitoring, runbook }),
+            body:    JSON.stringify({ cmc_level, identity, iac, cicd, monitoring, runbook, notion_page_id }),
         });
         if (!res.ok) throw new Error("Error al guardar");
-        const p = { cmc_level, identity, iac, cicd, monitoring, runbook };
+        const p = { cmc_level, identity, iac, cicd, monitoring, runbook, notion_page_id };
         _profilesCache[_profileGroupId] = p;
         document.getElementById("profile-modal")._data = p;
         _renderProfileView(p);
@@ -1140,6 +1183,62 @@ async function saveProfile() {
 
 function closeProfileModal() {
     document.getElementById("profile-modal").style.display = "none";
+}
+
+async function sendToNotion(s3Prefix, accountId) {
+    // Buscar notion_page_id en el profile del grupo correspondiente
+    const group = (_accountsData || []).find(g =>
+        g.accounts.some(a => a.account_id === accountId)
+    );
+    const groupId = group?.group_id;
+
+    if (!groupId) {
+        alert("No se encontró el grupo de esta cuenta. Asegúrate de que está registrada en Cuentas.");
+        return;
+    }
+
+    // Leer profile para obtener notion_page_id
+    let notionPageId = "";
+    try {
+        const res  = await fetch(`${API_URL}/profiles/${groupId}`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        notionPageId = data.profile?.notion_page_id || "";
+    } catch {}
+
+    if (!notionPageId) {
+        alert("Este cliente no tiene una página de Notion configurada.\n\nVe a Cuentas → Service Profile del cliente → añade el Page ID de Notion.");
+        return;
+    }
+
+    const btn = event.target.closest("button");
+    const originalText = btn.innerHTML;
+    btn.disabled  = true;
+    btn.innerHTML = "⏳ Enviando...";
+
+    try {
+        const res = await fetch(`${API_URL}/notion/${s3Prefix}`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+            body:    JSON.stringify({ notion_page_id: notionPageId }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error desconocido");
+
+        btn.innerHTML = "✅ Enviado";
+        btn.style.background = "rgba(16,185,129,0.12)";
+        btn.style.borderColor = "rgba(16,185,129,0.3)";
+        btn.style.color = "#34d399";
+
+        if (data.url) {
+            setTimeout(() => window.open(data.url, "_blank"), 500);
+        }
+    } catch (err) {
+        btn.disabled  = false;
+        btn.innerHTML = originalText;
+        alert(`Error al enviar a Notion: ${err.message}`);
+    }
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ from extractors.ecs_extractor import ECSExtractor
 from extractors.efs_extractor import EFSExtractor
 from extractors.eks_extractor import EKSExtractor
 from extractors.elb_extractor import ELBExtractor
+from extractors.iam_extractor import IAMExtractor
 from extractors.dynamodb_extractor import DynamoDBExtractor
 from generators.bedrock_generator import BedrockGenerator
 from generators.drawio_generator import DrawioGenerator
@@ -51,8 +52,9 @@ class InfraOrchestrator:
             "Direct Connect": lambda: DXExtractor(self.session).extract_connections(),
             "ECS Clusters": lambda: ECSExtractor(self.session).extract_ecs_clusters(),
             "EFS File Systems": lambda: EFSExtractor(self.session).extract_file_systems(),
-            "EKS Clusters": lambda: EKSExtractor(self.session).extract_eks_clusters(),
+            "EKS Clusters":   lambda: EKSExtractor(self.session).extract_eks_clusters(),
             "DynamoDB Tables": lambda: DynamoDBExtractor(self.session).extract_tables(),
+            "IAM":            lambda: IAMExtractor(self.session).extract(),
         }
 
         results = {}
@@ -61,7 +63,7 @@ class InfraOrchestrator:
                 results[name] = extract_fn()
             except Exception as e:
                 print(f"  Advertencia: No se pudo extraer {name}: {e}")
-                results[name] = []
+                results[name] = None if name == "IAM" else []
 
         return InfrastructureData(
             region=self.region_name,
@@ -85,13 +87,18 @@ class InfraOrchestrator:
             efs_file_systems=results["EFS File Systems"],
             eks_clusters=results["EKS Clusters"],
             dynamodb_tables=results["DynamoDB Tables"],
+            iam_summary=results["IAM"],
         )
 
     def export_to_json(self, infra: InfrastructureData, output_dir: str = "outputs") -> str:
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"infra_{infra.region}.json")
 
+        # iam_summary se excluye del JSON — no es una lista serializable estándar
+        iam_backup = infra.iam_summary
+        infra.iam_summary = None
         data = asdict(infra)
+        infra.iam_summary = iam_backup
 
         resource_labels = {
             "vpcs": "VPCs",

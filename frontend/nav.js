@@ -8,6 +8,7 @@ function navigate(sectionId) {
     if (sectionId === "home")     drawArchDiagram();
     if (sectionId === "history")  loadHistory();
     if (sectionId === "accounts") loadAccounts();
+    if (sectionId === "users")    loadUsers();
 }
 
 function copyTrustPolicy(btn) {

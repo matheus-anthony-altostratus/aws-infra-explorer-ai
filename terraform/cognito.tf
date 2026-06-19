@@ -3,7 +3,12 @@ resource "aws_cognito_user_pool" "main" {
 
   # Solo admins pueden crear usuarios (no auto-registro público)
   admin_create_user_config {
-    allow_admin_create_user_only = false
+    allow_admin_create_user_only = true
+    invite_message_template {
+      email_subject = "Bienvenido a Infra Explorer AI — Altostratus"
+      email_message = "Hola,\n\nTu cuenta ha sido creada en Infra Explorer AI.\n\nEmail: {username}\nContraseña temporal: {####}\n\nAccede en: https://d2y8h0jbecvclg.cloudfront.net\nDeberás cambiar tu contraseña en el primer inicio de sesión.\n\nAltostratus CMC Team"
+      sms_message   = "{username} — Tu contraseña temporal para Infra Explorer AI es: {####}"
+    }
   }
 
   # Verificación por email

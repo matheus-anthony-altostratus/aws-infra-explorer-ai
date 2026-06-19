@@ -158,8 +158,8 @@ Este diagrama muestra cómo interactúan los servicios AWS internamente desde qu
   ┌──────────────────┐
   │  Cuenta Cliente  │  STS AssumeRole → credenciales temporales (1h)
   │                  │  rol: infra-explorer-read-only (solo lectura)
-  │  17 extractores  │  extrae: VPCs, EC2, RDS, ECS, EKS, ELB,
-  │  boto3           │          TGW, VPN, DX, EFS, SG, EIP...
+  │  19 extractores  │  extrae: VPCs, EC2, RDS, DynamoDB, IAM,
+  │  boto3           │          ECS, EKS, ELB, TGW, VPN, DX, EFS, SG, EIP...
   └──────┬───────────┘
          │
          │  Paso 2 — Generación de documentación con IA
@@ -221,7 +221,7 @@ Este diagrama muestra cómo interactúan los servicios AWS internamente desde qu
 | 2 | **Autenticación** | Cognito gestiona el registro (solo `@altostratus.es`) y el login. Emite un JWT que el browser almacena y envía en cada petición. |
 | 3 | **Lanzar análisis** | El frontend envía `POST /analyze` con el JWT. API Gateway valida el token antes de invocar Lambda. |
 | 4 | **Respuesta inmediata** | Lambda (síncrona) guarda `status: processing` en S3, se auto-invoca de forma asíncrona y devuelve `202 { analysis_id }` al browser en menos de 1 segundo. |
-| 5 | **Análisis en background** | Lambda (asíncrona) asume el rol `infra-explorer-read-only` en la cuenta cliente via STS, extrae la infraestructura con 16 extractores boto3, genera documentación y sugerencias con Bedrock, genera el diagrama draw.io y sube los 4 archivos a S3. |
+| 5 | **Análisis en background** | Lambda (asíncrona) asume el rol `infra-explorer-read-only` en la cuenta cliente via STS, extrae la infraestructura con 19 extractores boto3, genera documentación y sugerencias con Bedrock, genera el diagrama draw.io con 8 pestañas y sube los 4 archivos a S3. |
 | 6 | **Polling** | El browser consulta `GET /status/{analysis_id}` cada 5 segundos hasta recibir `status: completed`. |
 | 7 | **Descarga** | El browser recibe las presigned URLs y el ingeniero descarga los archivos directamente desde S3 (validez 1 hora). |
 
@@ -289,10 +289,11 @@ aws-infra-explorer-ai/
 │   ├── core/
 │   │   ├── orchestrator.py        # Coordina extractores y generadores
 │   │   └── session_manager.py     # Gestión sesiones boto3 (AssumeRole)
-│   ├── extractors/                # 16 extractores de servicios AWS
+│   ├── extractors/                # 19 extractores de servicios AWS
 │   ├── generators/
 │   │   ├── bedrock_generator.py   # Documentación + sugerencias con IA
 │   │   └── drawio_generator.py    # Diagramas draw.io (XML)
+│   │   └── notion_generator.py    # Integración con Notion API
 │   └── models/
 │       └── infra_model.py         # Dataclasses de recursos AWS
 ├── frontend/
@@ -331,8 +332,9 @@ aws-infra-explorer-ai/
 | Networking | VPCs, Subnets, IGW, NAT GW, Route Tables, VPC Peering, Elastic IPs |
 | Compute | EC2 Instances |
 | Containers | ECS Clusters, EKS Clusters |
-| Database | RDS Instances |
+| Database | RDS Instances, DynamoDB Tables |
 | Storage | EFS File Systems |
+| Identidad | IAM Roles (custom), IAM Groups, IAM Users |
 | Load Balancing | ALB, NLB (con Listeners y Target Groups) |
 | Connectivity | Transit GW, VPN, Direct Connect |
 | Security | Security Groups |
@@ -346,8 +348,7 @@ aws-infra-explorer-ai/
 | `infra_{region}.json` | Inventario estructurado de todos los recursos encontrados en la cuenta. |
 | `documentation_{region}.md` | Documentación técnica generada con IA: resumen ejecutivo, arquitectura de red, recursos, seguridad. |
 | `suggestions_{region}.md` | Recomendaciones basadas en los 5 pilares del AWS Well-Architected Framework. |
-| `diagram_{region}.drawio` | Diagrama de arquitectura con iconos AWS oficiales. Editable en app.diagrams.net. |
-
+| `diagram_{region}.drawio` | Diagrama de arquitectura con iconos AWS oficiales dividido en 8 pestañas por categoría. Editable en app.diagrams.net. |
 ---
 
 ## Seguridad
@@ -418,6 +419,8 @@ cd terraform && terraform init && terraform apply
 
 ## Roadmap
 
+## Roadmap
+
 | Fase | Descripción | Estado |
 |---|---|---|
 | 1 | Extracción de infraestructura con boto3 | ✅ |
@@ -430,7 +433,8 @@ cd terraform && terraform init && terraform apply
 | 8 | Despliegue serverless (Terraform + Lambda + CloudFront) | ✅ |
 | 9 | Autenticación (Amazon Cognito) | ✅ |
 | 10 | Historial de análisis compartido + gestión de cuentas (DynamoDB) | ✅ |
-| 11 | Diagrama draw.io con 7 pestañas por categoría + extractor DynamoDB | ✅ |
-| 12 | Tech Profile — ficha técnica por cliente | ⬜ Pendiente |
+| 11 | Diagrama draw.io con 8 pestañas + extractores DynamoDB e IAM | ✅ |
+| 12 | Service Profile — ficha técnica y runbook operativo por cliente | ✅ |
 | 13 | Análisis multi-región — consolidar varias regiones en un único output | ⬜ Pendiente |
-| 14 | Dominio personalizado (Route 53 + ACM) | ⬜ Pendiente |
+| 14 | Integración con Notion — publicar análisis automáticamente | ⬜ Pendiente (token pendiente) |
+| 15 | Dominio personalizado (Route 53 + ACM) | ⬜ Pendiente |

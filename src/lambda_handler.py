@@ -16,6 +16,8 @@ FUNCTION_NAME  = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "")
 ACCOUNTS_TABLE = os.environ.get("ACCOUNTS_TABLE", "infra-explorer-accounts")
 HISTORY_TABLE  = os.environ.get("HISTORY_TABLE",  "infra-explorer-history")
 NOTION_TOKEN   = os.environ.get("NOTION_TOKEN", "")
+COGNITO_USER_POOL_ID = os.environ.get("COGNITO_USER_POOL_ID", "")
+cognito_client       = boto3.client("cognito-idp")
 
 # ─── Router ──────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,16 @@ def handler(event, context):
         return _handle_profile_put(event)
     elif route_key == "POST /notion/{s3_prefix}":
         return _handle_notion(event)
+    elif route_key == "GET /users":
+        return _handle_users_list(event)
+    elif route_key == "GET /users/log":
+        return _handle_users_log(event)
+    elif route_key == "POST /users":
+        return _handle_users_create(event)
+    elif route_key == "DELETE /users/{email}":
+        return _handle_users_delete(event)
+    elif route_key == "POST /users/{email}/reset":
+        return _handle_users_reset(event)
     else:
         return _response(404, {"error": "Not found"})
 
@@ -457,6 +469,132 @@ def _handle_profile_put(event):
         return _response(200, {"saved": True})
     except Exception as e:
         return _response(500, {"error": str(e)})
+
+# ─── Users ───────────────────────────────────────────────────────────────────
+
+def _handle_users_list(event):
+    try:
+        if not COGNITO_USER_POOL_ID:
+            return _response(503, {"error": "COGNITO_USER_POOL_ID no configurado"})
+        users = []
+        kwargs = {"UserPoolId": COGNITO_USER_POOL_ID, "Limit": 60}
+        response = cognito_client.list_users(**kwargs)
+        while True:
+            for u in response.get("Users", []):
+                attrs = {a["Name"]: a["Value"] for a in u.get("Attributes", [])}
+                users.append({
+                    "email":      attrs.get("email", u["Username"]),
+                    "status":     u["UserStatus"],
+                    "enabled":    u["Enabled"],
+                    "created_at": u["UserCreateDate"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
+            token = response.get("PaginationToken")
+            if not token:
+                break
+            response = cognito_client.list_users(**kwargs, PaginationToken=token)
+        return _response(200, {"users": users})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+def _handle_users_create(event):
+    try:
+        if not COGNITO_USER_POOL_ID:
+            return _response(503, {"error": "COGNITO_USER_POOL_ID no configurado"})
+        body  = json.loads(event.get("body", "{}"))
+        email = body.get("email", "").strip().lower()
+        if not email or not email.endswith("@altostratus.es"):
+            return _response(400, {"error": "El email debe ser @altostratus.es"})
+        cognito_client.admin_create_user(
+            UserPoolId=COGNITO_USER_POOL_ID,
+            Username=email,
+            UserAttributes=[{"Name": "email", "Value": email},
+                            {"Name": "email_verified", "Value": "true"}],
+            DesiredDeliveryMediums=["EMAIL"],
+        )
+        created_by = _get_user_email(event)
+        _save_history({
+            "analysis_id": f"USER_ACTION#{uuid.uuid4()}",
+            "timestamp":   _now_iso(),
+            "action":      "CREATE",
+            "target":      email,
+            "user_email":  created_by,
+        })
+        return _response(201, {"created": email})
+    except cognito_client.exceptions.UsernameExistsException:
+        return _response(409, {"error": "Este usuario ya existe"})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+def _handle_users_delete(event):
+    try:
+        if not COGNITO_USER_POOL_ID:
+            return _response(503, {"error": "COGNITO_USER_POOL_ID no configurado"})
+        email      = event.get("pathParameters", {}).get("email", "").strip()
+        deleted_by = _get_user_email(event)
+        if not email:
+            return _response(400, {"error": "email requerido"})
+        if email == deleted_by:
+            return _response(400, {"error": "No puedes eliminar tu propia cuenta"})
+        cognito_client.admin_delete_user(
+            UserPoolId=COGNITO_USER_POOL_ID, Username=email,
+        )
+        _save_history({
+            "analysis_id": f"USER_ACTION#{uuid.uuid4()}",
+            "timestamp":   _now_iso(),
+            "action":      "DELETE",
+            "target":      email,
+            "user_email":  deleted_by,
+        })
+        return _response(200, {"deleted": email})
+    except cognito_client.exceptions.UserNotFoundException:
+        return _response(404, {"error": "Usuario no encontrado"})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+def _handle_users_reset(event):
+    try:
+        if not COGNITO_USER_POOL_ID:
+            return _response(503, {"error": "COGNITO_USER_POOL_ID no configurado"})
+        email    = event.get("pathParameters", {}).get("email", "").strip()
+        reset_by = _get_user_email(event)
+        if not email:
+            return _response(400, {"error": "email requerido"})
+        cognito_client.admin_reset_user_password(
+            UserPoolId=COGNITO_USER_POOL_ID, Username=email,
+        )
+        _save_history({
+            "analysis_id": f"USER_ACTION#{uuid.uuid4()}",
+            "timestamp":   _now_iso(),
+            "action":      "RESET_PASSWORD",
+            "target":      email,
+            "user_email":  reset_by,
+        })
+        return _response(200, {"reset": email})
+    except cognito_client.exceptions.UserNotFoundException:
+        return _response(404, {"error": "Usuario no encontrado"})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+def _handle_users_log(event):
+    try:
+        table    = dynamodb.Table(HISTORY_TABLE)
+        response = table.scan(
+            FilterExpression=Attr("analysis_id").begins_with("USER_ACTION#")
+        )
+        items = response.get("Items", [])
+        while "LastEvaluatedKey" in response:
+            response = table.scan(
+                FilterExpression=Attr("analysis_id").begins_with("USER_ACTION#"),
+                ExclusiveStartKey=response["LastEvaluatedKey"],
+            )
+            items.extend(response.get("Items", []))
+        items.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return _response(200, {"logs": items[:50]})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
 
 def _handle_notion(event):
     try:

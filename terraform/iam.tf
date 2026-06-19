@@ -76,6 +76,17 @@ resource "aws_iam_role_policy" "lambda_custom" {
           aws_dynamodb_table.accounts.arn,
           aws_dynamodb_table.history.arn
         ]
+      },
+      {
+        Sid    = "CognitoAdminUsers"
+        Effect = "Allow"
+        Action = [
+          "cognito-idp:AdminCreateUser",
+          "cognito-idp:AdminDeleteUser",
+          "cognito-idp:AdminResetUserPassword",
+          "cognito-idp:ListUsers"
+        ]
+        Resource = aws_cognito_user_pool.main.arn
       }
     ]
   })

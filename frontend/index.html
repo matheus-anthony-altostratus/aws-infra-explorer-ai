@@ -404,7 +404,10 @@
                         <input id="login-password" type="password" placeholder="••••••••" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitLogin()">
                     </div>
                     <button id="login-btn" onclick="submitLogin()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Iniciar sesión</button>
-                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;">¿No tienes cuenta? <a onclick="showAuthScreen('register')" style="color:#60a5fa; cursor:pointer;">Regístrate</a></p>
+                    <div style="text-align:center; font-size:13px; color:#64748b; margin:0;">
+                        <p style="margin:0 0 6px;">¿No tienes cuenta? Solicítala a un compañero del equipo CMC-AWS.</p>
+                        <a onclick="showAuthScreen('resetpwd')" style="color:#60a5fa; cursor:pointer;">¿Olvidaste tu contraseña?</a>
+                    </div>
                 </div>
 
                 <!-- REGISTER -->
@@ -454,6 +457,30 @@
                     </div>
                     <button id="newpwd-btn" onclick="submitNewPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer;">Guardar contraseña</button>
                 </div>
+
+                <!-- RESET PASSWORD -->
+                <div id="view-resetpwd" style="display:none;">
+                    <div style="text-align:center; margin-bottom:20px;">
+                        <span style="font-size:40px;">🔑</span>
+                        <h2 style="font-size:18px; font-weight:600; margin:8px 0 4px; color:#f1f5f9;">Restablecer contraseña</h2>
+                        <p style="font-size:13px; color:#64748b; margin:0;">Introduce el código que recibiste por email y tu nueva contraseña.</p>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Correo</label>
+                        <input id="reset-email" type="email" placeholder="nombre@altostratus.es" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Código de verificación</label>
+                        <input id="reset-code" type="text" placeholder="123456" maxlength="6" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:18px; letter-spacing:0.3em; text-align:center; outline:none; box-sizing:border-box;">
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Nueva contraseña</label>
+                        <input id="reset-newpwd" type="password" placeholder="Mínimo 8 caracteres" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitResetPassword()">
+                    </div>
+                    <button id="resetpwd-btn" onclick="submitResetPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Restablecer contraseña</button>
+                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;"><a onclick="showAuthScreen('login')" style="color:#60a5fa; cursor:pointer;">Volver al login</a></p>
+                </div>
+
             </div>
             <p style="text-align:center; font-size:11px; color:#334155; margin-top:20px;">AWS Infra Explorer AI — Uso interno Altostratus</p>
         </div>
@@ -508,6 +535,11 @@
                 Historial
             </a>
 
+            <a class="sidebar-item" onclick="navigate('users')" id="nav-users">
+                <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                Usuarios
+            </a>
+
             <a class="sidebar-item" onclick="navigate('guide')" id="nav-guide">
                 <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 Guía de Configuración
@@ -533,15 +565,24 @@
                     <h1 style="font-size:28px; font-weight:700; margin:0 0 8px;">
                         Bienvenido a <span class="gradient-text">Infra Explorer AI</span>
                     </h1>
-                    <p style="color:var(--text-secondary); font-size:15px; margin:0;">
-                        Analiza automáticamente la infraestructura AWS de cualquier cuenta y genera documentación técnica, sugerencias de mejora y diagramas de arquitectura — en minutos.
+                    <p style="color:var(--text-secondary); font-size:15px; margin:0 0 12px;">
+                        Herramienta interna de Altostratus para analizar automáticamente la infraestructura AWS de cualquier cuenta de cliente.
+                    </p>
+                    <p style="color:var(--text-secondary); font-size:14px; margin:0 0 6px; line-height:1.7;">
+                        En lugar de revisar manualmente la consola de AWS recurso por recurso, el ingeniero selecciona la cuenta del cliente, pulsa analizar, y en minutos obtiene:
+                        documentación técnica completa, recomendaciones de mejora basadas en buenas prácticas de AWS, y un diagrama de arquitectura editable —
+                        todo generado automáticamente con Inteligencia Artificial.
+                    </p>
+                    <p style="color:var(--text-secondary); font-size:14px; margin:0; line-height:1.7;">
+                        El acceso a las cuentas de los clientes es de <strong style="color:var(--text-primary);">solo lectura</strong>, sin credenciales estáticas y con trazabilidad total.
+                        Cada análisis queda registrado en el historial compartido del equipo.
                     </p>
                 </div>
 
                 <!-- Stats -->
                 <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;">
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">17</p>
+                        <p style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">19</p>
                         <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Servicios analizados</p>
                     </div>
                     <div class="stat-card">
@@ -553,7 +594,7 @@
                         <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Outputs generados</p>
                     </div>
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">7</p>
+                        <p style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">8</p>
                         <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Pestañas en diagrama</p>
                     </div>
                 </div>
@@ -580,11 +621,15 @@
                         </div>
                         <div>
                             <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Database & Storage</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">RDS · EFS · ALB · NLB</p>
+                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">RDS · DynamoDB · EFS · ALB · NLB</p>
                         </div>
                         <div>
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Connectivity</p>
+                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Connectivity & Seguridad</p>
                             <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">Transit GW · VPN · Direct Connect · Security Groups</p>
+                        </div>
+                        <div style="grid-column: span 4; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
+                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Identidad & Acceso</p>
+                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">IAM Roles (custom) · IAM Groups · IAM Users — sin exponer emails ni credenciales</p>
                         </div>
                     </div>
                 </div>
@@ -954,6 +999,74 @@
                     <div style="display:flex; gap:12px; justify-content:flex-end;">
                         <button onclick="closeAccountModal()" class="btn-secondary">Cancelar</button>
                         <button id="account-save-btn" onclick="saveAccount()" class="btn-primary" style="width:auto; padding:10px 24px;">Guardar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SECCIÓN: USUARIOS ===== -->
+            <section class="section" id="section-users">
+                <div style="margin-bottom:24px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <h1 style="font-size:24px; font-weight:700; margin:0 0 6px;">Gestión de Usuarios</h1>
+                        <p style="color:var(--text-secondary); font-size:14px; margin:0;">Usuarios con acceso a Infra Explorer AI. Solo correos @altostratus.es.</p>
+                    </div>
+                    <button onclick="openAddUser()" class="btn-primary" style="width:auto; padding:10px 20px;">
+                        + Añadir usuario
+                    </button>
+                </div>
+
+                <div class="card" style="margin-bottom:20px;">
+                    <div id="users-container">
+                        <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-bottom:20px;">
+                    <h2 style="font-size:15px; font-weight:600; margin:0 0 16px; color:var(--text-secondary);">📋 Registro de actividad</h2>
+                    <div id="users-log-container">
+                        <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
+                    </div>
+                </div>
+
+                <div style="background:rgba(1,102,255,0.06); border:1px solid rgba(1,102,255,0.2); border-radius:12px; padding:20px;">
+                    <h3 style="font-size:14px; font-weight:600; color:#60a5fa; margin:0 0 14px;">ℹ️ ¿Cómo funciona?</h3>
+                    <div style="display:flex; flex-direction:column; gap:12px; font-size:13px; color:var(--text-secondary); line-height:1.7;">
+                        <div style="display:flex; gap:10px; align-items:flex-start;">
+                            <span style="font-size:16px;">1️⃣</span>
+                            <p style="margin:0;"><strong style="color:var(--text-primary);">Crear usuario:</strong> Pulsa "+ Añadir usuario" e introduce el correo @altostratus.es del compañero.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:flex-start;">
+                            <span style="font-size:16px;">2️⃣</span>
+                            <p style="margin:0;"><strong style="color:var(--text-primary);">Email automático:</strong> El sistema envía un email al usuario con su contraseña temporal.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:flex-start;">
+                            <span style="font-size:16px;">3️⃣</span>
+                            <p style="margin:0;"><strong style="color:var(--text-primary);">Primer login:</strong> El usuario inicia sesión con la contraseña temporal y establece su contraseña definitiva.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:flex-start;">
+                            <span style="font-size:16px;">🔑</span>
+                            <p style="margin:0;"><strong style="color:var(--text-primary);">¿Contraseña olvidada?</strong> Pulsa "🔑 Reset" junto al usuario. Recibirá un email con un código para establecer una nueva contraseña.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== MODAL: AÑADIR USUARIO ===== -->
+            <div id="add-user-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; align-items:center; justify-content:center;">
+                <div style="background:#111827; border:1px solid var(--border); border-radius:16px; padding:32px; width:100%; max-width:420px; margin:24px;">
+                    <h2 style="font-size:18px; font-weight:600; margin:0 0 8px; color:var(--text-primary);">Añadir usuario</h2>
+                    <p style="font-size:13px; color:var(--text-secondary); margin:0 0 24px;">Se enviará un email con contraseña temporal al nuevo usuario.</p>
+
+                    <div id="add-user-error" style="display:none; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:16px;"></div>
+
+                    <div style="margin-bottom:20px;">
+                        <label style="display:block; font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Correo corporativo</label>
+                        <input id="new-user-email" type="email" placeholder="nombre@altostratus.es" class="input-field">
+                    </div>
+
+                    <div style="display:flex; gap:12px; justify-content:flex-end;">
+                        <button onclick="closeAddUser()" class="btn-secondary">Cancelar</button>
+                        <button id="add-user-btn" onclick="createUser()" class="btn-primary" style="width:auto; padding:10px 24px;">Crear usuario</button>
                     </div>
                 </div>
             </div>

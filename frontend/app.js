@@ -134,7 +134,7 @@ let _pendingEmail = "", _pendingSession = "", _pendingUsername = "";
 function showAuthScreen(view) {
     document.getElementById("auth-screen").style.display = "flex";
     document.getElementById("app-screen").style.display = "none";
-    ["view-login", "view-register", "view-confirm", "view-newpassword"].forEach(id => {
+    ["view-login", "view-register", "view-confirm", "view-newpassword", "view-resetpwd"].forEach(id => {
         document.getElementById(id).style.display = "none";
     });
     document.getElementById("view-" + view).style.display = "block";
@@ -169,7 +169,7 @@ async function submitLogin() {
         }
         initApp();
     } catch (err) {
-        showAuthError(err.message || "Credenciales incorrectas.");
+        showAuthError(_translateCognitoError(err.message));
     } finally {
         btn.disabled = false; btn.textContent = "Iniciar sesión";
     }
@@ -1239,6 +1239,214 @@ async function sendToNotion(s3Prefix, accountId) {
         btn.innerHTML = originalText;
         alert(`Error al enviar a Notion: ${err.message}`);
     }
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+async function loadUsers() {
+    document.getElementById("users-container").innerHTML =
+        `<p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>`;
+    try {
+        const res = await fetch(`${API_URL}/users`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await res.json();
+        renderUsers(data.users || []);
+    } catch {
+        document.getElementById("users-container").innerHTML =
+            `<p style="color:#f472b6; font-size:14px;">Error al cargar los usuarios.</p>`;
+    }
+    loadUsersLog();
+}
+
+function renderUsers(users) {
+    const container = document.getElementById("users-container");
+    if (!users.length) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">No hay usuarios registrados.</p>`;
+        return;
+    }
+    const me = getUserEmail();
+    const statusColors = {
+        CONFIRMED:             { bg: "rgba(16,185,129,0.1)",  border: "rgba(16,185,129,0.3)",  text: "#34d399", label: "Activo" },
+        FORCE_CHANGE_PASSWORD: { bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.3)",  text: "#fbbf24", label: "Pendiente login" },
+        UNCONFIRMED:           { bg: "rgba(148,163,184,0.1)", border: "rgba(148,163,184,0.3)", text: "#94a3b8", label: "Sin confirmar" },
+    };
+    const thStyle = `padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border);`;
+    const rows = users.map(u => {
+        const s = statusColors[u.status] || statusColors["UNCONFIRMED"];
+        const created = new Date(u.created_at).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+        const isMe = u.email === me;
+        return `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:12px 16px; font-size:13px; color:var(--text-primary); font-weight:500;">${u.email}</td>
+            <td style="padding:12px 16px;">
+                <span style="font-size:11px; background:${s.bg}; color:${s.text}; border:1px solid ${s.border}; padding:2px 10px; border-radius:10px; font-weight:600;">${s.label}</span>
+            </td>
+            <td style="padding:12px 16px; font-size:12px; color:var(--text-secondary);">${created}</td>
+            <td style="padding:12px 16px;">
+                ${isMe
+                    ? `<span style="font-size:12px; color:var(--text-secondary);">Tu cuenta</span>`
+                    : `<button onclick="resetUserPassword('${u.email}')" style="font-size:12px; background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); color:#fbbf24; padding:4px 10px; border-radius:6px; cursor:pointer; margin-right:6px;">🔑 Reset</button><button onclick="deleteUser('${u.email}')" style="font-size:12px; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:4px 10px; border-radius:6px; cursor:pointer;">Eliminar</button>`}
+            </td>
+        </tr>`;
+    }).join("");
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            <thead><tr>
+                <th style="${thStyle}">Email</th>
+                <th style="${thStyle}">Estado</th>
+                <th style="${thStyle}">Creado</th>
+                <th style="${thStyle}">Acciones</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+async function loadUsersLog() {
+    const container = document.getElementById("users-log-container");
+    try {
+        const res = await fetch(`${API_URL}/users/log`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (!res.ok) { container.innerHTML = ""; return; }
+        const data = await res.json();
+        const logs = data.logs || [];
+        if (!logs.length) {
+            container.innerHTML = `<p style="color:var(--text-secondary); font-size:13px;">Sin actividad registrada.</p>`;
+            return;
+        }
+        container.innerHTML = logs.map(l => {
+            const date = new Date(l.timestamp).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+            const colors = { CREATE: "#34d399", DELETE: "#f472b6", RESET_PASSWORD: "#fbbf24" };
+            const icons  = { CREATE: "✅", DELETE: "🗑️", RESET_PASSWORD: "🔑" };
+            const verbs  = { CREATE: "creó la cuenta de", DELETE: "eliminó la cuenta de", RESET_PASSWORD: "reseteó la contraseña de" };
+            const color = colors[l.action] || "#94a3b8";
+            const icon  = icons[l.action] || "•";
+            const verb  = verbs[l.action] || l.action;
+            return `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+                <span>${icon}</span>
+                <span style="color:var(--text-secondary);">${date}</span>
+                <span style="color:var(--text-primary); font-weight:500;">${l.user_email}</span>
+                <span style="color:var(--text-secondary);">${verb}</span>
+                <span style="color:${color}; font-weight:500;">${l.target}</span>
+            </div>`;
+        }).join("");
+    } catch {
+        container.innerHTML = "";
+    }
+}
+
+function openAddUser() {
+    document.getElementById("new-user-email").value = "";
+    document.getElementById("add-user-error").style.display = "none";
+    document.getElementById("add-user-modal").style.display = "flex";
+}
+
+function closeAddUser() {
+    document.getElementById("add-user-modal").style.display = "none";
+}
+
+async function createUser() {
+    const email = document.getElementById("new-user-email").value.trim().toLowerCase();
+    const errorEl = document.getElementById("add-user-error");
+    const btn = document.getElementById("add-user-btn");
+    errorEl.style.display = "none";
+    if (!email) { errorEl.textContent = "El email es requerido."; errorEl.style.display = "block"; return; }
+    if (!email.endsWith("@altostratus.es")) {
+        errorEl.textContent = "Solo se permiten correos @altostratus.es";
+        errorEl.style.display = "block";
+        return;
+    }
+    btn.disabled = true; btn.textContent = "Creando...";
+    try {
+        const res = await fetch(`${API_URL}/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+            body: JSON.stringify({ email }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al crear usuario");
+        closeAddUser();
+        loadUsers();
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = "block";
+    } finally {
+        btn.disabled = false; btn.textContent = "Crear usuario";
+    }
+}
+
+async function deleteUser(email) {
+    if (!confirm(`¿Eliminar el acceso de ${email}?\nEsta acción quedará registrada.`)) return;
+    try {
+        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}`, {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al eliminar");
+        loadUsers();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function resetUserPassword(email) {
+    if (!confirm(`¿Enviar email de reset de contraseña a ${email}?\nEl usuario recibirá un código para establecer una nueva contraseña.`)) return;
+    try {
+        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}/reset`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al resetear");
+        alert(`✅ Email de reset enviado a ${email}`);
+        loadUsers();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+async function submitResetPassword() {
+    const email    = document.getElementById("reset-email").value.trim();
+    const code     = document.getElementById("reset-code").value.trim();
+    const password = document.getElementById("reset-newpwd").value;
+    const btn      = document.getElementById("resetpwd-btn");
+    if (!email || !code || !password) { showAuthError("Completa todos los campos."); return; }
+    if (password.length < 8) { showAuthError("Mínimo 8 caracteres."); return; }
+    btn.disabled = true; btn.textContent = "Restableciendo...";
+    try {
+        await cognitoRequest("AWSCognitoIdentityProviderService.ConfirmForgotPassword", {
+            ClientId: CLIENT_ID,
+            Username: email,
+            ConfirmationCode: code,
+            Password: password,
+        });
+        showAuthScreen("login");
+        document.getElementById("login-email").value = email;
+        alert("✅ Contraseña restablecida. Ya puedes iniciar sesión.");
+    } catch (err) {
+        showAuthError(_translateCognitoError(err.message));
+    } finally {
+        btn.disabled = false; btn.textContent = "Restablecer contraseña";
+    }
+}
+
+function _translateCognitoError(msg) {
+    if (!msg) return "Error de autenticación.";
+    const map = {
+        "User does not exist":              "El usuario no existe.",
+        "Incorrect username or password":   "Email o contraseña incorrectos.",
+        "Password attempts exceeded":       "Demasiados intentos. Espera unos minutos.",
+        "User is not confirmed":            "Tu cuenta no ha sido verificada.",
+        "User is disabled":                 "Tu cuenta ha sido desactivada.",
+        "Invalid password":                 "La contraseña no cumple los requisitos (mín. 8 caracteres, mayúscula y número).",
+        "Username/client id combination not found": "El usuario no existe.",
+    };
+    for (const [key, val] of Object.entries(map)) {
+        if (msg.includes(key)) return val;
+    }
+    return msg;
 }
 
 // ─── UI helpers ───────────────────────────────────────────────────────────────

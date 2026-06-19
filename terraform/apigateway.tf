@@ -89,6 +89,35 @@ resource "aws_apigatewayv2_route" "notion" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+resource "aws_apigatewayv2_route" "users_list" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /users"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "users_create" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /users"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "users_delete" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "DELETE /users/{email}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "users_log" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /users/log"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "users_reset" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /users/{email}/reset"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
 
 resource "aws_apigatewayv2_authorizer" "cognito" {
   api_id           = aws_apigatewayv2_api.main.id

@@ -21,10 +21,11 @@ resource "aws_lambda_function" "analyzer" {
 
   environment {
     variables = {
-      OUTPUTS_BUCKET = var.outputs_bucket_name
-      ACCOUNTS_TABLE = aws_dynamodb_table.accounts.name
-      HISTORY_TABLE  = aws_dynamodb_table.history.name
-      NOTION_TOKEN   = var.notion_token
+      OUTPUTS_BUCKET       = var.outputs_bucket_name
+      ACCOUNTS_TABLE       = aws_dynamodb_table.accounts.name
+      HISTORY_TABLE        = aws_dynamodb_table.history.name
+      NOTION_TOKEN         = var.notion_token
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
     }
   }
 

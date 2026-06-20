@@ -419,8 +419,6 @@ cd terraform && terraform init && terraform apply
 
 ## Roadmap
 
-## Roadmap
-
 | Fase | Descripción | Estado |
 |---|---|---|
 | 1 | Extracción de infraestructura con boto3 | ✅ |
@@ -435,6 +433,16 @@ cd terraform && terraform init && terraform apply
 | 10 | Historial de análisis compartido + gestión de cuentas (DynamoDB) | ✅ |
 | 11 | Diagrama draw.io con 8 pestañas + extractores DynamoDB e IAM | ✅ |
 | 12 | Service Profile — ficha técnica y runbook operativo por cliente | ✅ |
-| 13 | Análisis multi-región — consolidar varias regiones en un único output | ⬜ Pendiente |
-| 14 | Integración con Notion — publicar análisis automáticamente | ⬜ Pendiente (token pendiente) |
-| 15 | Dominio personalizado (Route 53 + ACM) | ⬜ Pendiente |
+| 13 | Gestión de usuarios — administración controlada + auditoría | ✅ |
+| 14 | Health Score — puntuación automática de seguridad y buenas prácticas | ✅ |
+| 15 | Dashboard operativo — panel de estado de todos los clientes | ✅ |
+| 16 | Alertas de seguridad — detección inmediata de configuraciones peligrosas | ✅ |
+| 17 | Comparación entre análisis (Diff) — detectar cambios en la infraestructura | 🔧 En desarrollo |
+| 18 | Análisis multi-región — consolidar varias regiones en un único output | ⬜ Fase futura |
+| 19 | Integración con Notion — publicar análisis automáticamente | ⬜ Fase futura |
+| 20 | Exportar a PDF con branding Altostratus | ⬜ Fase futura |
+| 21 | Métricas de uso del equipo — estadísticas de análisis y actividad | ⬜ Fase futura |
+| 22 | Resumen semanal automatizado — email con estado de clientes | ⬜ Fase futura |
+| 23 | Chatbot sobre infraestructura — preguntas en lenguaje natural (Bedrock + RAG) | ⬜ Fase futura |
+| 24 | Integración con ServiceNow — creación automática de tickets desde alertas | ⬜ Fase futura |
+| 25 | Dominio personalizado (Route 53 + ACM) | ⬜ Fase futura |

@@ -1471,4 +1471,184 @@ function setLoading(loading) {
     document.getElementById("submitBtn").disabled       = loading;
 }
 
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+async function loadDashboard() {
+    try {
+        const res = await fetch(`${API_URL}/dashboard`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await res.json();
+        renderDashboard(data);
+    } catch {
+        document.getElementById("dashboard-table").innerHTML =
+            `<p style="color:#f472b6; font-size:14px;">Error al cargar el dashboard.</p>`;
+    }
+}
+
+function renderDashboard(data) {
+    document.getElementById("dm-clients").textContent = data.total_clients ?? "—";
+    document.getElementById("dm-accounts").textContent = data.total_accounts ?? "—";
+    document.getElementById("dm-alerts").textContent = data.total_alerts ?? 0;
+    document.getElementById("dm-score").textContent = data.avg_score != null ? data.avg_score : "—";
+
+    const container = document.getElementById("dashboard-table");
+    const clients = data.clients || [];
+    if (!clients.length) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Sin cuentas registradas. Ve a Cuentas para añadir la primera.</p>`;
+        return;
+    }
+
+    const thStyle = `padding:10px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border);`;
+    const rows = clients.map(c => {
+        const scoreColor = c.score == null ? "#6B7280" : c.score >= 80 ? "#34d399" : c.score >= 50 ? "#fbbf24" : "#f472b6";
+        const scoreBg = c.score == null ? "rgba(107,114,128,0.1)" : c.score >= 80 ? "rgba(16,185,129,0.1)" : c.score >= 50 ? "rgba(245,158,11,0.1)" : "rgba(242,14,112,0.1)";
+        const scoreLabel = c.score != null ? c.score : "—";
+        const dot = c.score == null ? "⚪" : c.score >= 80 ? "🟢" : c.score >= 50 ? "🟡" : "🔴";
+        const lastDate = c.last_analysis ? _timeAgo(c.last_analysis) : "Sin análisis";
+        return `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:11px 16px; font-size:13px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="width:8px; height:8px; border-radius:50%; background:${c.color};"></span>
+                    <span style="font-weight:500; color:var(--text-primary);">${c.group_name}</span>
+                    <span style="color:var(--text-secondary); font-size:12px;">/ ${c.account_name}</span>
+                </div>
+            </td>
+            <td style="padding:11px 16px; font-size:12px; font-family:monospace; color:var(--text-secondary);">${c.account_id}</td>
+            <td style="padding:11px 16px; font-size:12px; color:var(--text-secondary);">${c.region}</td>
+            <td style="padding:11px 16px;">
+                <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600; color:${scoreColor}; background:${scoreBg}; border:1px solid ${scoreColor}33; padding:3px 10px; border-radius:10px;">
+                    ${dot} ${scoreLabel}
+                </span>
+            </td>
+            <td style="padding:11px 16px; font-size:12px; color:var(--text-secondary);">${c.alerts || 0}</td>
+            <td style="padding:11px 16px; font-size:12px; color:var(--text-secondary);">${lastDate}</td>
+        </tr>`;
+    }).join("");
+
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            <thead><tr>
+                <th style="${thStyle}">Cliente / Cuenta</th>
+                <th style="${thStyle}">Account ID</th>
+                <th style="${thStyle}">Región</th>
+                <th style="${thStyle}">Health Score</th>
+                <th style="${thStyle}">Alertas</th>
+                <th style="${thStyle}">Último análisis</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+}
+
+// ─── Dashboard Tabs & Alerts ────────────────────────────────────────────────
+
+function switchDashboardTab(tab) {
+    document.getElementById('dashboard-tab-summary').style.display = tab === 'summary' ? 'block' : 'none';
+    document.getElementById('dashboard-tab-alerts').style.display = tab === 'alerts' ? 'block' : 'none';
+    document.getElementById('dtab-summary').classList.toggle('active', tab === 'summary');
+    document.getElementById('dtab-alerts').classList.toggle('active', tab === 'alerts');
+    if (tab === 'alerts') loadAlerts();
+}
+
+let _alertsData = [];
+
+async function loadAlerts() {
+    try {
+        const res = await fetch(`${API_URL}/alerts`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await res.json();
+        _alertsData = data.alerts || [];
+        populateAlertAccountFilter();
+        renderAlerts(_alertsData);
+    } catch {
+        document.getElementById("alerts-table-container").innerHTML =
+            `<p style="color:#f472b6; font-size:14px;">Error al cargar alertas.</p>`;
+    }
+}
+
+function populateAlertAccountFilter() {
+    const select = document.getElementById('alert-filter-account');
+    const accounts = [...new Set(_alertsData.map(a => a.account_name))].sort();
+    select.innerHTML = '<option value="">Todas las cuentas</option>' +
+        accounts.map(n => `<option value="${n}">${n}</option>`).join('');
+}
+
+function filterAlerts() {
+    const severity = document.getElementById('alert-filter-severity').value;
+    const account = document.getElementById('alert-filter-account').value;
+    let filtered = _alertsData;
+    if (severity) filtered = filtered.filter(a => a.severity === severity);
+    if (account) filtered = filtered.filter(a => a.account_name === account);
+    renderAlerts(filtered);
+}
+
+function renderAlerts(alerts) {
+    const container = document.getElementById('alerts-table-container');
+    if (!alerts.length) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">✅ No hay alertas activas con los filtros seleccionados.</p>`;
+        return;
+    }
+
+    const severityBadge = (s) => {
+        const map = {
+            critical: { icon: '🔴', label: 'Crítica', color: '#f472b6', bg: 'rgba(242,14,112,0.1)' },
+            high:     { icon: '🟠', label: 'Alta',    color: '#fb923c', bg: 'rgba(251,146,60,0.1)' },
+            medium:   { icon: '🟡', label: 'Media',   color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+            low:      { icon: '⚪', label: 'Baja',    color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
+            info:     { icon: 'ℹ️', label: 'Info',    color: '#60a5fa', bg: 'rgba(96,165,250,0.1)' },
+        };
+        const m = map[s] || map.info;
+        return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:${m.color};background:${m.bg};border:1px solid ${m.color}33;padding:3px 9px;border-radius:10px;">${m.icon} ${m.label}</span>`;
+    };
+
+    // Agrupar por cuenta
+    const groups = {};
+    alerts.forEach(a => {
+        const key = a.account_id || 'unknown';
+        if (!groups[key]) groups[key] = { ...a, alerts: [] };
+        groups[key].alerts.push(a);
+    });
+
+    const scoreIcon = (count) => count >= 7 ? '🔴' : count >= 3 ? '🟡' : '🟢';
+
+    const html = Object.values(groups).map((g, i) => {
+        const thStyle = `padding:8px 12px; text-align:left; font-size:11px; font-weight:600; color:var(--text-secondary); text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border);`;
+        const rows = g.alerts.map(a => `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 12px;">${severityBadge(a.severity)}</td>
+            <td style="padding:8px 12px; font-size:12px; color:var(--text-secondary);">${a.type || ''}</td>
+            <td style="padding:8px 12px; font-size:12px; color:var(--text-primary); font-family:monospace;">${a.resource || ''}</td>
+            <td style="padding:8px 12px; font-size:13px; color:var(--text-secondary);">${a.msg || ''}</td>
+        </tr>`).join('');
+
+        return `<div style="border:1px solid var(--border); border-radius:10px; margin-bottom:10px; overflow:hidden;">
+            <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.chevron').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';"
+                 style="padding:14px 18px; cursor:pointer; display:flex; align-items:center; gap:12px; background:rgba(255,255,255,0.02); user-select:none;">
+                <span class="chevron" style="font-size:10px; color:var(--text-secondary);">▶</span>
+                <span style="width:10px; height:10px; border-radius:50%; background:${g.color || '#0166ff'};"></span>
+                <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${g.group_name || ''} / ${g.account_name || g.account_id}</span>
+                <span style="font-size:12px; color:var(--text-secondary); font-family:monospace;">${g.account_id}</span>
+                <span style="margin-left:auto; font-size:12px; color:var(--text-secondary);">${scoreIcon(g.alerts.length)} ${g.alerts.length} alerta${g.alerts.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div style="display:none; padding:0 12px 12px;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead><tr>
+                        <th style="${thStyle}">Severidad</th>
+                        <th style="${thStyle}">Tipo</th>
+                        <th style="${thStyle}">Recurso</th>
+                        <th style="${thStyle}">Descripción</th>
+                    </tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+        <div style="font-size:12px; color:var(--text-secondary); margin-bottom:12px;">${alerts.length} alerta${alerts.length !== 1 ? 's' : ''} en ${Object.keys(groups).length} cuenta${Object.keys(groups).length !== 1 ? 's' : ''}</div>
+        ${html}`;
+}
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }

@@ -49,6 +49,10 @@ def handler(event, context):
         return _handle_profile_put(event)
     elif route_key == "POST /notion/{s3_prefix}":
         return _handle_notion(event)
+    elif route_key == "GET /dashboard":
+        return _handle_dashboard(event)
+    elif route_key == "GET /alerts":
+        return _handle_alerts(event)
     elif route_key == "GET /users":
         return _handle_users_list(event)
     elif route_key == "GET /users/log":
@@ -153,6 +157,8 @@ def _run_analysis(params):
             s3_client.upload_file(filepath, OUTPUTS_BUCKET, s3_key)
             download_urls[filename] = _generate_presigned_url(s3_key)
 
+        health = _calculate_health_score(infra)
+
         _save_status(s3_prefix, {
             "status":        "completed",
             "account_id":    account_id,
@@ -163,6 +169,8 @@ def _run_analysis(params):
             "documentation": report.documentation,
             "suggestions":   report.suggestions,
             "downloads":     download_urls,
+            "health_score":  health,
+            "timestamp":     _now_iso(),
         })
 
         _save_history({
@@ -643,6 +651,171 @@ def _handle_notion(event):
 
         return _response(200, {"url": page_url})
 
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+# ─── Health Score & Alerts ───────────────────────────────────────────────────
+
+def _generate_security_alerts(infra):
+    """Genera alertas de seguridad a partir de la infraestructura."""
+    alerts = []
+
+    critical_ports = {22, 3389}
+    sensitive_ports = {3306, 5432, 1433, 27017, 6379, 9200}
+    for sg in infra.security_groups:
+        sg_name = sg.name or sg.resource_id
+        for rule in sg.ingress_rules:
+            for cidr in rule.cidr_blocks:
+                if cidr in ("0.0.0.0/0", "::/0"):
+                    if rule.from_port == 0 and rule.to_port == 65535:
+                        alerts.append({"severity": "critical", "resource": sg_name, "type": "SG", "msg": "Todos los puertos abiertos al mundo"})
+                    elif rule.from_port in critical_ports:
+                        alerts.append({"severity": "critical", "resource": sg_name, "type": "SG", "msg": f"Puerto {rule.from_port} abierto al mundo (SSH/RDP)"})
+                    elif rule.from_port in sensitive_ports:
+                        alerts.append({"severity": "high", "resource": sg_name, "type": "SG", "msg": f"Puerto {rule.from_port} (base de datos) abierto al mundo"})
+                    elif rule.to_port - rule.from_port > 100:
+                        alerts.append({"severity": "medium", "resource": sg_name, "type": "SG", "msg": f"Rango amplio de puertos abierto ({rule.from_port}-{rule.to_port})"})
+                    else:
+                        alerts.append({"severity": "high", "resource": sg_name, "type": "SG", "msg": f"Puerto {rule.from_port} abierto al mundo"})
+
+    for rds in infra.rds_instances:
+        rds_name = rds.name or rds.resource_id
+        if rds.publicly_accessible:
+            alerts.append({"severity": "critical", "resource": rds_name, "type": "RDS", "msg": "Acceso publico habilitado"})
+        if not rds.multi_az:
+            alerts.append({"severity": "high", "resource": rds_name, "type": "RDS", "msg": "Sin Multi-AZ (sin alta disponibilidad)"})
+
+    for vpc in infra.vpcs:
+        vpc_name = vpc.name or vpc.resource_id
+        vpc_nats = [n for n in infra.nat_gateways if n.vpc_id == vpc.resource_id]
+        if 0 < len(vpc_nats) < 2:
+            alerts.append({"severity": "medium", "resource": vpc_name, "type": "VPC", "msg": "Un solo NAT Gateway (sin redundancia AZ)"})
+
+    for eip in infra.elastic_ips:
+        if not eip.association_id:
+            alerts.append({"severity": "low", "resource": eip.public_ip, "type": "EIP", "msg": "EIP sin asociar (coste innecesario)"})
+
+    for ec2 in infra.instances:
+        ec2_name = ec2.name or ec2.resource_id
+        if ec2.state == "stopped":
+            alerts.append({"severity": "medium", "resource": ec2_name, "type": "EC2", "msg": "Instancia detenida"})
+
+    if infra.iam_summary:
+        for user in getattr(infra.iam_summary, "users", []):
+            if not user.mfa_active:
+                alerts.append({"severity": "high", "resource": user.username, "type": "IAM", "msg": "Usuario sin MFA habilitado"})
+
+    no_name_count = sum(1 for ec2 in infra.instances if not ec2.name)
+    if no_name_count > 0:
+        alerts.append({"severity": "info", "resource": f"{no_name_count} instancias", "type": "EC2", "msg": "Instancias sin tag Name"})
+
+    return alerts
+
+
+def _calculate_health_score(infra):
+    """Score determinista: 100 - penalizaciones. Sin IA."""
+    alerts = _generate_security_alerts(infra)
+    score = 100
+    penalties = {"critical": 15, "high": 10, "medium": 5, "low": 3, "info": 2}
+    for alert in alerts:
+        score -= penalties.get(alert["severity"], 0)
+    return {"score": max(0, score), "alerts": alerts}
+
+
+def _handle_alerts(event):
+    """Devuelve todas las alertas activas de todas las cuentas."""
+    try:
+        table = dynamodb.Table(ACCOUNTS_TABLE)
+        response = table.scan()
+        items = response.get("Items", [])
+        while "LastEvaluatedKey" in response:
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            items.extend(response.get("Items", []))
+
+        all_alerts = []
+        for item in items:
+            if item["account_id"] == "PROFILE":
+                continue
+            s3_prefix = f"{item['account_id']}_{item.get('default_region', 'eu-west-1')}"
+            status = _get_status(s3_prefix)
+            if status and status.get("status") == "completed":
+                for alert in status.get("health_score", {}).get("alerts", []):
+                    all_alerts.append({
+                        **alert,
+                        "account_id": item["account_id"],
+                        "account_name": item.get("account_name", ""),
+                        "group_name": item.get("group_name", ""),
+                        "color": item.get("color", "#0166ff"),
+                        "region": item.get("default_region", "eu-west-1"),
+                    })
+
+        severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        all_alerts.sort(key=lambda x: severity_order.get(x.get("severity"), 5))
+        return _response(200, {"alerts": all_alerts})
+    except Exception as e:
+        return _response(500, {"error": str(e)})
+
+
+def _handle_dashboard(event):
+    try:
+        # Leer todas las cuentas
+        table = dynamodb.Table(ACCOUNTS_TABLE)
+        response = table.scan()
+        items = response.get("Items", [])
+        while "LastEvaluatedKey" in response:
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            items.extend(response.get("Items", []))
+
+        groups = {}
+        for item in items:
+            if item["account_id"] == "PROFILE":
+                continue
+            gid = item["group_id"]
+            if gid not in groups:
+                groups[gid] = {"group_id": gid, "group_name": item.get("group_name", ""), "accounts": []}
+            groups[gid]["accounts"].append({
+                "account_id": item["account_id"],
+                "account_name": item.get("account_name", ""),
+                "color": item.get("color", "#0166ff"),
+                "default_region": item.get("default_region", "eu-west-1"),
+            })
+
+        # Para cada cuenta, leer su último status.json
+        clients = []
+        total_alerts = 0
+        scores = []
+        for g in groups.values():
+            for acc in g["accounts"]:
+                s3_prefix = f"{acc['account_id']}_{acc['default_region']}"
+                status = _get_status(s3_prefix)
+                entry = {
+                    "group_name": g["group_name"],
+                    "account_name": acc["account_name"],
+                    "account_id": acc["account_id"],
+                    "color": acc["color"],
+                    "region": acc["default_region"],
+                }
+                if status and status.get("status") == "completed":
+                    entry["score"] = status.get("health_score", {}).get("score")
+                    entry["alerts"] = len(status.get("health_score", {}).get("alerts", []))
+                    entry["last_analysis"] = status.get("timestamp", "")
+                    if entry["score"] is not None:
+                        scores.append(entry["score"])
+                        total_alerts += entry["alerts"]
+                else:
+                    entry["score"] = None
+                    entry["alerts"] = 0
+                    entry["last_analysis"] = None
+                clients.append(entry)
+
+        avg_score = round(sum(scores) / len(scores)) if scores else None
+        return _response(200, {
+            "total_clients": len(groups),
+            "total_accounts": sum(len(g["accounts"]) for g in groups.values()),
+            "total_alerts": total_alerts,
+            "avg_score": avg_score,
+            "clients": clients,
+        })
     except Exception as e:
         return _response(500, {"error": str(e)})
 

@@ -558,120 +558,137 @@
         <!-- MAIN -->
         <main class="main-content">
 
-            <!-- ===== SECCIÓN: INICIO ===== -->
+            <!-- ===== SECCIÓN: INICIO / DASHBOARD ===== -->
             <section class="section active" id="section-home">
 
-                <div style="margin-bottom:32px;">
+                <div style="margin-bottom:24px;">
                     <h1 style="font-size:28px; font-weight:700; margin:0 0 8px;">
-                        Bienvenido a <span class="gradient-text">Infra Explorer AI</span>
+                        <span class="gradient-text">Dashboard</span>
                     </h1>
-                    <p style="color:var(--text-secondary); font-size:15px; margin:0 0 12px;">
-                        Herramienta interna de Altostratus para analizar automáticamente la infraestructura AWS de cualquier cuenta de cliente.
-                    </p>
-                    <p style="color:var(--text-secondary); font-size:14px; margin:0 0 6px; line-height:1.7;">
-                        En lugar de revisar manualmente la consola de AWS recurso por recurso, el ingeniero selecciona la cuenta del cliente, pulsa analizar, y en minutos obtiene:
-                        documentación técnica completa, recomendaciones de mejora basadas en buenas prácticas de AWS, y un diagrama de arquitectura editable —
-                        todo generado automáticamente con Inteligencia Artificial.
-                    </p>
-                    <p style="color:var(--text-secondary); font-size:14px; margin:0; line-height:1.7;">
-                        El acceso a las cuentas de los clientes es de <strong style="color:var(--text-primary);">solo lectura</strong>, sin credenciales estáticas y con trazabilidad total.
-                        Cada análisis queda registrado en el historial compartido del equipo.
-                    </p>
+                    <p style="color:var(--text-secondary); font-size:14px; margin:0;">Panel operativo — estado de salud de los clientes gestionados.</p>
                 </div>
 
-                <!-- Stats -->
-                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px;">
+                <!-- Dashboard tabs -->
+                <div class="tab-nav" style="margin-bottom:24px;">
+                    <button class="tab-btn active" onclick="switchDashboardTab('summary')" id="dtab-summary">📊 Resumen</button>
+                    <button class="tab-btn" onclick="switchDashboardTab('alerts')" id="dtab-alerts">🚨 Alertas</button>
+                </div>
+
+                <!-- TAB: Resumen -->
+                <div id="dashboard-tab-summary">
+
+                <!-- Metrics cards -->
+                <div id="dashboard-metrics" style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px;">
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">19</p>
-                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Servicios analizados</p>
+                        <p id="dm-clients" style="font-size:28px; font-weight:700; color:var(--accent-blue); margin:0;">—</p>
+                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Clientes</p>
                     </div>
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:var(--accent-pink); margin:0;">AI</p>
-                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Claude Sonnet 4</p>
+                        <p id="dm-accounts" style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">—</p>
+                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Cuentas</p>
+                    </div>
+                    <div class="stat-card" style="cursor:pointer;" onclick="switchDashboardTab('alerts')">
+                        <p id="dm-alerts" style="font-size:28px; font-weight:700; color:var(--accent-pink); margin:0;">—</p>
+                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Alertas activas</p>
                     </div>
                     <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:#34d399; margin:0;">4</p>
-                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Outputs generados</p>
-                    </div>
-                    <div class="stat-card">
-                        <p style="font-size:28px; font-weight:700; color:#a78bfa; margin:0;">8</p>
-                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Pestañas en diagrama</p>
+                        <p id="dm-score" style="font-size:28px; font-weight:700; color:#34d399; margin:0;">—</p>
+                        <p style="font-size:13px; color:var(--text-secondary); margin:4px 0 0;">Score promedio</p>
                     </div>
                 </div>
 
-                <!-- Diagrama de arquitectura -->
-                <div class="card card-accent" style="margin-bottom:24px;">
+                <!-- Client table -->
+                <div class="card" style="margin-bottom:24px;">
+                    <h2 style="font-size:15px; font-weight:600; margin:0 0 16px; display:flex; align-items:center; gap:8px;">
+                        <span style="color:var(--accent-blue);">⬡</span> Estado por cuenta
+                    </h2>
+                    <div id="dashboard-table">
+                        <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
+                    </div>
+                </div>
+
+                <!-- Health Score legend -->
+                <div style="background:rgba(1,102,255,0.06); border:1px solid rgba(1,102,255,0.2); border-radius:12px; margin-bottom:24px; overflow:hidden;">
+                    <div onclick="document.getElementById('hs-legend').style.display = document.getElementById('hs-legend').style.display === 'none' ? 'block' : 'none'; this.querySelector('span').textContent = document.getElementById('hs-legend').style.display === 'none' ? '▶' : '▼';"
+                         style="padding:16px 20px; cursor:pointer; display:flex; align-items:center; gap:10px; user-select:none;">
+                        <span style="font-size:10px; color:var(--text-secondary); transition:transform .2s;">▶</span>
+                        <h3 style="font-size:14px; font-weight:600; color:#60a5fa; margin:0;">ℹ️ ¿Qué es el Health Score?</h3>
+                    </div>
+                    <div id="hs-legend" style="display:none; padding:0 20px 20px; font-size:13px; color:var(--text-secondary); line-height:1.7;">
+                        <p style="margin:0 0 12px;">Puntuación automática de <strong style="color:var(--text-primary);">0 a 100</strong> que evalúa la seguridad y buenas prácticas de una cuenta AWS. Se calcula con cada análisis — sin IA, reglas deterministas.</p>
+
+                        <p style="margin:0 0 8px; font-weight:600; color:var(--text-primary);">Escala de colores</p>
+                        <div style="display:flex; gap:16px; margin-bottom:16px;">
+                            <span>🟢 ≥ 80 — Saludable</span>
+                            <span>🟡 50–79 — Mejorable</span>
+                            <span>🔴 < 50 — Crítico</span>
+                            <span>⚪ Sin análisis</span>
+                        </div>
+
+                        <p style="margin:0 0 8px; font-weight:600; color:var(--text-primary);">Penalizaciones aplicadas</p>
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr style="border-bottom:1px solid var(--border);">
+                                    <th style="text-align:left; padding:6px 10px; color:var(--text-secondary);">Problema detectado</th>
+                                    <th style="text-align:center; padding:6px 10px; color:var(--text-secondary);">Puntos</th>
+                                    <th style="text-align:center; padding:6px 10px; color:var(--text-secondary);">Severidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS públicamente accesible</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">-15</td><td style="text-align:center;">🔴 Crítica</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Security Group con 0.0.0.0/0 en puerto sensible (22, 3389, 3306...)</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">-10</td><td style="text-align:center;">🟠 Alta</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS sin Multi-AZ</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">-8</td><td style="text-align:center;">🟡 Media</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">VPC con un solo NAT Gateway</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">-5</td><td style="text-align:center;">🟡 Baja</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Elastic IP no asociada</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-3</td><td style="text-align:center;">⚪ Baja</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Instancia EC2 detenida (stopped)</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-3</td><td style="text-align:center;">⚪ Baja</td></tr>
+                                <tr><td style="padding:6px 10px;">Instancias EC2 sin tag Name</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-2 (máx -10)</td><td style="text-align:center;">⚪ Info</td></tr>
+                            </tbody>
+                        </table>
+
+                        <p style="margin:16px 0 0; font-size:12px; color:var(--text-secondary);">💡 El score se recalcula cada vez que se ejecuta un nuevo análisis sobre la cuenta.</p>
+                    </div>
+                </div>
+
+                <!-- Architecture diagram -->
+                <div class="card card-accent">
                     <h2 style="font-size:16px; font-weight:600; margin:0 0 20px; display:flex; align-items:center; gap:8px;">
-                        <span style="color:var(--accent-blue);">⬡</span> Cómo funciona
+                        <span style="color:var(--accent-blue);">⬡</span> Arquitectura
                     </h2>
                     <canvas id="arch-diagram"></canvas>
                 </div>
 
-                <!-- Servicios -->
-                <div class="card" style="margin-bottom:24px;">
-                    <h2 style="font-size:16px; font-weight:600; margin:0 0 16px;">📊 Servicios analizados</h2>
-                    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px;">
-                        <div>
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Networking</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">VPCs · Subnets · IGW · NAT GW · Route Tables · VPC Peering · Elastic IPs</p>
-                        </div>
-                        <div>
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Compute & Containers</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">EC2 · ECS Clusters · EKS Clusters</p>
-                        </div>
-                        <div>
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Database & Storage</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">RDS · DynamoDB · EFS · ALB · NLB</p>
-                        </div>
-                        <div>
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Connectivity & Seguridad</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">Transit GW · VPN · Direct Connect · Security Groups</p>
-                        </div>
-                        <div style="grid-column: span 4; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;">
-                            <p style="font-size:12px; font-weight:600; color:var(--accent-blue); margin:0 0 6px; text-transform:uppercase; letter-spacing:.05em;">Identidad & Acceso</p>
-                            <p style="font-size:13px; color:var(--text-secondary); margin:0; line-height:1.6;">IAM Roles (custom) · IAM Groups · IAM Users — sin exponer emails ni credenciales</p>
-                        </div>
-                    </div>
-                </div>
+                </div><!-- cierra dashboard-tab-summary -->
 
-                <!-- Outputs -->
-                <div class="card">
-                    <h2 style="font-size:16px; font-weight:600; margin:0 0 16px;">📦 Outputs generados por análisis</h2>
-                    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px;">
-                        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#060d1a; border-radius:8px; border:1px solid var(--border);">
-                            <span style="font-size:20px;">📄</span>
-                            <div>
-                                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0 0 2px;">Documentación técnica</p>
-                                <p style="font-size:12px; color:var(--text-secondary); margin:0;">Markdown generado con IA. Resumen ejecutivo, arquitectura de red, recursos, seguridad.</p>
+                <!-- TAB: Alertas -->
+                <div id="dashboard-tab-alerts" style="display:none;">
+                    <div class="card">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                            <h2 style="font-size:15px; font-weight:600; margin:0; display:flex; align-items:center; gap:8px;">
+                                <span style="color:var(--accent-pink);">⬡</span> Alertas de seguridad activas
+                            </h2>
+                            <div style="display:flex; gap:8px;">
+                                <select id="alert-filter-severity" class="input-field" style="width:auto; padding:6px 12px; font-size:12px;" onchange="filterAlerts()">
+                                    <option value="">Todas las severidades</option>
+                                    <option value="critical">🔴 Crítica</option>
+                                    <option value="high">🟠 Alta</option>
+                                    <option value="medium">🟡 Media</option>
+                                    <option value="low">⚪ Baja</option>
+                                    <option value="info">ℹ️ Info</option>
+                                </select>
+                                <select id="alert-filter-account" class="input-field" style="width:auto; padding:6px 12px; font-size:12px;" onchange="filterAlerts()">
+                                    <option value="">Todas las cuentas</option>
+                                </select>
                             </div>
                         </div>
-                        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#060d1a; border-radius:8px; border:1px solid var(--border);">
-                            <span style="font-size:20px;">💡</span>
-                            <div>
-                                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0 0 2px;">Sugerencias Well-Architected</p>
-                                <p style="font-size:12px; color:var(--text-secondary); margin:0;">Recomendaciones basadas en los 5 pilares del AWS Well-Architected Framework.</p>
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#060d1a; border-radius:8px; border:1px solid var(--border);">
-                            <span style="font-size:20px;">🏗️</span>
-                            <div>
-                                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0 0 2px;">Diagrama draw.io</p>
-                                <p style="font-size:12px; color:var(--text-secondary); margin:0;">Diagrama de arquitectura con iconos AWS oficiales. Editable en app.diagrams.net.</p>
-                            </div>
-                        </div>
-                        <div style="display:flex; gap:12px; align-items:flex-start; padding:14px; background:#060d1a; border-radius:8px; border:1px solid var(--border);">
-                            <span style="font-size:20px;">📊</span>
-                            <div>
-                                <p style="font-size:13px; font-weight:600; color:var(--text-primary); margin:0 0 2px;">Inventario JSON</p>
-                                <p style="font-size:12px; color:var(--text-secondary); margin:0;">Inventario estructurado de todos los recursos encontrados en la cuenta.</p>
-                            </div>
+                        <div id="alerts-table-container">
+                            <p style="color:var(--text-secondary); font-size:14px;">Cargando alertas...</p>
                         </div>
                     </div>
                 </div>
 
             </section>
 
-            <!-- ===== SECCIÓN: ANALIZADOR ===== -->
+             <!-- ===== SECCIÓN: ANALIZADOR ===== -->
             <section class="section" id="section-analyzer">
 
                 <div style="margin-bottom:24px;">

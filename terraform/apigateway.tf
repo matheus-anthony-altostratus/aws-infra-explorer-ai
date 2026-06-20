@@ -130,3 +130,15 @@ resource "aws_apigatewayv2_authorizer" "cognito" {
     issuer   = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
   }
 }
+
+resource "aws_apigatewayv2_route" "dashboard" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /dashboard"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_route" "alerts" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /alerts"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}

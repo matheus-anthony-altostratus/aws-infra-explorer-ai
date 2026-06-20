@@ -5,7 +5,7 @@ function navigate(sectionId) {
     document.getElementById("section-" + sectionId).classList.add("active");
     document.getElementById("nav-" + sectionId).classList.add("active");
 
-    if (sectionId === "home")     drawArchDiagram();
+    if (sectionId === "home")     { loadDashboard(); drawArchDiagram(); }
     if (sectionId === "history")  loadHistory();
     if (sectionId === "accounts") loadAccounts();
     if (sectionId === "users")    loadUsers();

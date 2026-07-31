@@ -4,7 +4,10 @@ const CLIENT_ID  = "1hk5o7m7h2pkvbc5eh79tdgg8n";
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-function getToken() { return localStorage.getItem("access_token"); }
+// Se envía el id_token a la API porque es el único que lleva el claim `email`.
+// El backend lo necesita para saber QUIÉN ejecuta cada acción (registro de
+// actividad) y es también el token que espera el authorizer JWT de API Gateway.
+function getToken() { return localStorage.getItem("id_token") || localStorage.getItem("access_token"); }
 
 function saveTokens(accessToken, idToken, expiresIn) {
     localStorage.setItem("access_token", accessToken);
@@ -682,6 +685,8 @@ async function pollStatus(analysisId) {
 function showResults(data) {
     document.getElementById("docContent").innerHTML = marked.parse(data.documentation);
     document.getElementById("sugContent").innerHTML = marked.parse(data.suggestions);
+    renderChanges(data.changes);
+    renderNetworkPreview(data.diagram);
     const downloadLinks = document.getElementById("downloadLinks");
     downloadLinks.innerHTML = "";
     const fileLabels = {
@@ -699,6 +704,343 @@ function showResults(data) {
     document.getElementById("form-section").style.display = "none";
     document.getElementById("results-section").style.display = "block";
     setLoading(false);
+}
+
+function renderNetworkPreview(diagram) {
+    const card = document.getElementById("network-preview-card");
+    const img  = document.getElementById("network-preview-img");
+    if (!card || !img) return;
+    const url = buildNetworkDiagramDataURL(diagram);
+    if (url) { img.src = url; card.style.display = "block"; }
+    else { card.style.display = "none"; }
+}
+
+function _roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+function _truncate(ctx, text, maxW) {
+    text = String(text || "");
+    if (ctx.measureText(text).width <= maxW) return text;
+    while (text.length > 1 && ctx.measureText(text + "…").width > maxW) text = text.slice(0, -1);
+    return text + "…";
+}
+
+// Devuelve un PNG (dataURL) con el resumen de red. Reutilizable para Notion.
+function buildNetworkDiagramDataURL(diagram) {
+    if (!diagram || !(diagram.vpcs || []).length) return null;
+    const vpcs = diagram.vpcs;
+    const cols = Math.min(vpcs.length, 2);
+    const rows = Math.ceil(vpcs.length / cols);
+    const cardW = 420, cardH = 150, gapX = 40, gapY = 90, padX = 40, headerH = 90, footerH = 44;
+    const W = padX * 2 + cols * cardW + (cols - 1) * gapX;
+    const H = headerH + rows * cardH + (rows - 1) * gapY + footerH;
+
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = W * scale; canvas.height = H * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+    ctx.textBaseline = "top"; ctx.textAlign = "left";
+
+    ctx.fillStyle = "#0a0f1e"; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = "#f1f5f9"; ctx.font = "bold 22px system-ui";
+    ctx.fillText(`Red — ${diagram.region || ""}`, padX, 24);
+    const badges = [];
+    if (diagram.igw) badges.push("🌐 Internet");
+    if ((diagram.tgws || []).length) badges.push("🔀 Transit Gateway");
+    if (diagram.vpn) badges.push("🔗 VPN");
+    if (diagram.dx)  badges.push("⚡ Direct Connect");
+    ctx.font = "13px system-ui"; ctx.fillStyle = "#94a3b8";
+    ctx.fillText(badges.join("      "), padX, 58);
+
+    const pos = {};
+    vpcs.forEach((v, i) => {
+        const c = i % cols, r = Math.floor(i / cols);
+        const x = padX + c * (cardW + gapX);
+        const y = headerH + r * (cardH + gapY);
+        pos[v.id] = { x, y, cx: x + cardW / 2, cy: y + cardH / 2 };
+    });
+
+    const drawConn = (aId, bId, label, color) => {
+        const a = pos[aId], b = pos[bId];
+        if (!a || !b || a === b) return;
+        ctx.beginPath(); ctx.moveTo(a.cx, a.cy); ctx.lineTo(b.cx, b.cy);
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+        const mx = (a.cx + b.cx) / 2, my = (a.cy + b.cy) / 2;
+        ctx.fillStyle = "#0a0f1e"; ctx.fillRect(mx - 42, my - 10, 84, 20);
+        ctx.fillStyle = color; ctx.font = "11px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(label, mx, my); ctx.textAlign = "left"; ctx.textBaseline = "top";
+    };
+    (diagram.peerings || []).forEach(p => drawConn(p.a, p.b, "peering", "#34d399"));
+    const byTgw = {};
+    (diagram.tgw_links || []).forEach(l => { (byTgw[l.tgw] = byTgw[l.tgw] || []).push(l.vpc); });
+    Object.values(byTgw).forEach(list => {
+        for (let i = 0; i < list.length; i++)
+            for (let j = i + 1; j < list.length; j++) drawConn(list[i], list[j], "TGW", "#60a5fa");
+    });
+
+    vpcs.forEach(v => {
+        const p = pos[v.id];
+        ctx.fillStyle = "#111827"; _roundRect(ctx, p.x, p.y, cardW, cardH, 12); ctx.fill();
+        ctx.strokeStyle = "#1e2a45"; ctx.lineWidth = 1.5; _roundRect(ctx, p.x, p.y, cardW, cardH, 12); ctx.stroke();
+        ctx.fillStyle = "#0166ff"; _roundRect(ctx, p.x, p.y, cardW, 4, 2); ctx.fill();
+
+        ctx.fillStyle = "#f1f5f9"; ctx.font = "bold 16px system-ui"; ctx.textBaseline = "top";
+        ctx.fillText(_truncate(ctx, v.name, cardW - 140), p.x + 18, p.y + 18);
+        ctx.fillStyle = "#60a5fa"; ctx.font = "12px monospace";
+        ctx.fillText(v.cidr || "", p.x + 18, p.y + 42);
+
+        const chips = [["EC2", v.ec2], ["RDS", v.rds], ["ELB", v.elb], ["Subnets", v.subnets], ["NAT", v.nat]].filter(c => c[1] > 0);
+        let chx = p.x + 18, chy = p.y + 74;
+        ctx.font = "12px system-ui";
+        if (!chips.length) {
+            ctx.fillStyle = "#64748b"; ctx.fillText("sin recursos de cómputo", p.x + 18, p.y + 78);
+        }
+        chips.forEach(([lab, val]) => {
+            const txt = `${lab} ${val}`;
+            const w = ctx.measureText(txt).width + 20;
+            if (chx + w > p.x + cardW - 18) { chx = p.x + 18; chy += 30; }
+            ctx.fillStyle = "rgba(1,102,255,0.12)"; _roundRect(ctx, chx, chy, w, 22, 11); ctx.fill();
+            ctx.fillStyle = "#93c5fd"; ctx.textBaseline = "middle";
+            ctx.fillText(txt, chx + 10, chy + 11); ctx.textBaseline = "top";
+            chx += w + 8;
+        });
+    });
+
+    ctx.fillStyle = "#475569"; ctx.font = "11px system-ui";
+    ctx.fillText("Generado por AWS Infra Explorer AI — Altostratus", padX, H - 28);
+
+    return canvas.toDataURL("image/png");
+}
+
+
+function renderChanges(changes) {
+    const el = document.getElementById("changesContent");
+    if (!el) return;
+
+    if (!changes || changes.is_first) {
+        el.innerHTML = `<div style="text-align:center; padding:40px 24px;">
+            <div style="font-size:38px; margin-bottom:10px;">🆕</div>
+            <p style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0 0 6px;">Primer análisis de esta cuenta</p>
+            <p style="font-size:13px; color:var(--text-secondary); margin:0;">No hay un análisis anterior con el que comparar. El próximo mostrará los cambios.</p>
+        </div>`;
+        return;
+    }
+
+    if (!changes.has_changes) {
+        el.innerHTML = `<div style="text-align:center; padding:40px 24px;">
+            <div style="font-size:38px; margin-bottom:10px;">✅</div>
+            <p style="font-size:15px; font-weight:600; color:var(--text-primary); margin:0 0 6px;">Sin cambios</p>
+            <p style="font-size:13px; color:var(--text-secondary); margin:0;">La infraestructura es idéntica al análisis anterior.</p>
+        </div>`;
+        return;
+    }
+
+    const esc = s => String(s ?? "").replace(/[&<>"]/g, c => "&#" + c.charCodeAt(0) + ";");
+
+    const row = (icon, c) => `
+        <div style="padding:10px 0; border-bottom:1px solid var(--border);">
+            <span style="font-size:13px;">${icon} <strong style="color:var(--text-primary);">${esc(c.name)}</strong>
+            <span style="color:var(--text-secondary);"> · ${esc(c.category)}</span></span>
+            ${(c.changes || []).map(f => `<div style="font-size:12px; color:var(--text-secondary); margin:4px 0 0 22px;">
+                ${esc(f.field)}: <span style="color:#f472b6;">${esc(f.before)}</span> → <span style="color:#34d399;">${esc(f.after)}</span></div>`).join("")}
+        </div>`;
+
+    let html = `
+        <div style="display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap;">
+            <span style="background:rgba(52,211,153,.12); color:#34d399; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🟢 ${changes.added.length} nuevos</span>
+            <span style="background:rgba(244,114,182,.12); color:#f472b6; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🔴 ${changes.removed.length} eliminados</span>
+            <span style="background:rgba(251,191,36,.12); color:#fbbf24; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🟡 ${changes.modified.length} modificados</span>
+        </div>`;
+    html += changes.added.map(c => row("🟢", c)).join("");
+    html += changes.removed.map(c => row("🔴", c)).join("");
+    html += changes.modified.map(c => row("🟡", c)).join("");
+
+    el.innerHTML = html;
+}
+
+async function viewChanges(s3Prefix) {
+    const modal   = document.getElementById("downloads-modal");
+    const content = document.getElementById("downloads-modal-content");
+    content.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Cargando cambios...</p>`;
+    modal.style.display = "flex";
+    try {
+        const res = await fetch(`${API_URL}/status/${s3Prefix}`, {
+            headers: { "Authorization": `Bearer ${getToken()}` },
+        });
+        if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await res.json();
+        const ch = data.changes;
+        let body;
+        if (!ch || ch.is_first) {
+            body = `<p style="font-size:13px; color:var(--text-secondary);">🆕 Primer análisis de esta cuenta — no hay datos anteriores con los que comparar.</p>`;
+        } else if (!ch.has_changes) {
+            body = `<p style="font-size:13px; color:var(--text-secondary);">✅ Sin cambios respecto al análisis anterior.</p>`;
+        } else {
+            const esc = s => String(s ?? "").replace(/[&<>"]/g, c => "&#" + c.charCodeAt(0) + ";");
+            const row = (icon, c) => `<div style="padding:9px 0; border-bottom:1px solid var(--border); font-size:13px;">
+                ${icon} <strong style="color:var(--text-primary);">${esc(c.name)}</strong>
+                <span style="color:var(--text-secondary);"> · ${esc(c.category)}</span>
+                ${(c.changes || []).map(f => `<div style="font-size:12px; color:var(--text-secondary); margin:4px 0 0 22px;">${esc(f.field)}: <span style="color:#f472b6;">${esc(f.before)}</span> → <span style="color:#34d399;">${esc(f.after)}</span></div>`).join("")}
+            </div>`;
+            body = `<div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+                <span style="background:rgba(52,211,153,.12); color:#34d399; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🟢 ${ch.added.length} nuevos</span>
+                <span style="background:rgba(244,114,182,.12); color:#f472b6; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🔴 ${ch.removed.length} eliminados</span>
+                <span style="background:rgba(251,191,36,.12); color:#fbbf24; padding:6px 12px; border-radius:8px; font-size:13px; font-weight:600;">🟡 ${ch.modified.length} modificados</span>
+            </div>`
+            + ch.added.map(c => row("🟢", c)).join("")
+            + ch.removed.map(c => row("🔴", c)).join("")
+            + ch.modified.map(c => row("🟡", c)).join("");
+        }
+        content.innerHTML = `<h3 style="font-size:15px; font-weight:700; margin:0 0 16px;">🔄 Cambios — último análisis</h3>` + body;
+    } catch {
+        content.innerHTML = `<p style="color:#f472b6; font-size:14px;">No se pudieron cargar los cambios.</p>`;
+    }
+}
+
+// ─── Conexiones (multicuenta) ───────────────────────────────────────────────
+
+async function populateMultiGroups() {
+    if (!_accountsData || !_accountsData.length) { await _fetchAccounts(); }
+    const sel = document.getElementById("multi-group");
+    if (!sel) return;
+    const groups = _accountsData || [];
+    sel.innerHTML = `<option value="">— Selecciona un cliente —</option>` +
+        groups.map(g => `<option value="${g.group_id}">${g.group_name}</option>`).join("");
+    document.getElementById("multi-accounts").innerHTML =
+        `<p style="font-size:13px; color:var(--text-secondary); margin:0;">Selecciona un cliente para ver sus cuentas.</p>`;
+}
+
+function onMultiGroupChange() {
+    const gid   = document.getElementById("multi-group").value;
+    const cont  = document.getElementById("multi-accounts");
+    const group = (_accountsData || []).find(g => g.group_id === gid);
+    if (!group) {
+        cont.innerHTML = `<p style="font-size:13px; color:var(--text-secondary); margin:0;">Selecciona un cliente para ver sus cuentas.</p>`;
+        return;
+    }
+    if (!group.accounts.length) {
+        cont.innerHTML = `<p style="font-size:13px; color:var(--text-secondary); margin:0;">Este cliente no tiene cuentas registradas.</p>`;
+        return;
+    }
+    cont.innerHTML = group.accounts.map(a => `
+        <label style="display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer;">
+            <input type="checkbox" class="multi-acc-cb" value="${a.account_id}">
+            <span style="font-size:13px; color:var(--text-primary);">${a.account_name}</span>
+            <span style="font-size:12px; color:var(--text-secondary); font-family:monospace; margin-left:auto;">${a.account_id}</span>
+        </label>`).join("");
+    if (group.accounts[0]) document.getElementById("multi-region").value = group.accounts[0].default_region;
+}
+
+async function analyzeMulti() {
+    const errorBox = document.getElementById("multi-error-box");
+    errorBox.style.display = "none";
+    if (!isTokenValid()) { clearTokens(); showAuthScreen("login"); return; }
+
+    const ids    = Array.from(document.querySelectorAll(".multi-acc-cb:checked")).map(cb => cb.value);
+    const region = document.getElementById("multi-region").value;
+    if (ids.length < 2) {
+        errorBox.textContent = "Selecciona al menos 2 cuentas del mismo cliente.";
+        errorBox.style.display = "block";
+        return;
+    }
+
+    setMultiLoading(true);
+    try {
+        const res = await fetch(`${API_URL}/analyze`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
+            body: JSON.stringify({ account_ids: ids, region, user_email: getUserEmail() }),
+        });
+        if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al lanzar el análisis");
+        pollMultiStatus(data.analysis_id);
+    } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.style.display = "block";
+        setMultiLoading(false);
+    }
+}
+
+async function pollMultiStatus(analysisId) {
+    const errorBox  = document.getElementById("multi-error-box");
+    const stepLabel = document.getElementById("multi-step-label");
+    while (true) {
+        await sleep(5000);
+        try {
+            const res = await fetch(`${API_URL}/status/${analysisId}`, {
+                headers: { "Authorization": `Bearer ${getToken()}` },
+            });
+            if (res.status === 401) { clearTokens(); showAuthScreen("login"); return; }
+            const data = await res.json();
+            if (data.step && stepLabel) stepLabel.textContent = data.step;
+            if (data.status === "completed") { renderMultiResults(data); return; }
+            if (data.status === "error") throw new Error(data.error || "Error durante el análisis");
+        } catch (err) {
+            errorBox.textContent = err.message;
+            errorBox.style.display = "block";
+            setMultiLoading(false);
+            return;
+        }
+    }
+}
+
+function renderMultiResults(data) {
+    document.getElementById("multi-resultRegion").textContent = data.region || "";
+
+    document.getElementById("multi-accounts-summary").innerHTML = (data.accounts || []).map(a => {
+        const info = a.error
+            ? `<span style="font-size:11px; color:#f472b6;">⚠️ ${a.error}</span>`
+            : `<span style="font-size:11px; color:var(--text-secondary);">${a.summary?.vpcs ?? 0} VPC · ${a.summary?.transit_gateways ?? 0} TGW · ${a.summary?.vpc_peerings ?? 0} peering</span>`;
+        return `<div style="display:flex; flex-direction:column; gap:3px; padding:10px 14px; border:1px solid var(--border); border-radius:8px; border-left:3px solid ${a.color || "#0166ff"};">
+            <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${a.account_name}</span>
+            <span style="font-size:11px; color:var(--text-secondary); font-family:monospace;">${a.account_id}</span>
+            ${info}
+        </div>`;
+    }).join("");
+
+    const conns = data.connections || [];
+    document.getElementById("multi-connections").innerHTML = !conns.length
+        ? `<p style="font-size:13px; color:var(--text-secondary); margin:0;">No se detectaron conexiones directas (peering / transit gateway) entre las cuentas seleccionadas.</p>`
+        : `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead><tr style="border-bottom:1px solid var(--border);">
+                <th style="text-align:left; padding:8px 10px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;">Tipo</th>
+                <th style="text-align:left; padding:8px 10px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;">Entre</th>
+                <th style="text-align:left; padding:8px 10px; color:var(--text-secondary); font-size:11px; text-transform:uppercase;">Detalle</th>
+            </tr></thead>
+            <tbody>${conns.map(c => `<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:8px 10px;"><span style="font-size:11px; background:rgba(1,102,255,0.12); color:#60a5fa; border:1px solid rgba(1,102,255,0.3); padding:2px 8px; border-radius:10px;">${c.type}</span></td>
+                <td style="padding:8px 10px; color:var(--text-primary);">${c.from_name} ↔ ${c.to_name}</td>
+                <td style="padding:8px 10px; color:var(--text-secondary); font-family:monospace; font-size:12px;">${c.detail}</td>
+            </tr>`).join("")}</tbody>
+        </table>`;
+
+    document.getElementById("multi-narrative").innerHTML = data.narrative ? marked.parse(data.narrative) : "";
+
+    document.getElementById("multi-form-section").style.display = "none";
+    document.getElementById("multi-results-section").style.display = "block";
+    setMultiLoading(false);
+}
+
+function resetMultiForm() {
+    document.getElementById("multi-form-section").style.display = "block";
+    document.getElementById("multi-results-section").style.display = "none";
+    document.getElementById("multi-error-box").style.display = "none";
+}
+
+function setMultiLoading(loading) {
+    document.getElementById("multi-btnText").style.display    = loading ? "none" : "flex";
+    document.getElementById("multi-btnLoading").style.display = loading ? "flex" : "none";
+    document.getElementById("multi-submitBtn").disabled = loading;
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────
@@ -838,7 +1180,15 @@ function filterHistory() {
                         ${f.icon} ${f.label}
                     </a>`).join("")}
                     <span style="font-size:11px; color:var(--text-secondary); margin-left:2px;">⏳ ${daysLeft}d</span>
-                    <button onclick="sendToNotion('${g.s3_prefix}', '${g.account_id}')"
+                    <button onclick="viewChanges('${g.s3_prefix}')"
+                            style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:500;
+                                   background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.3); color:#fbbf24;
+                                   padding:5px 11px; border-radius:6px; cursor:pointer; transition:all .15s;"
+                            onmouseover="this.style.background='rgba(251,191,36,0.22)'"
+                            onmouseout="this.style.background='rgba(251,191,36,0.12)'">
+                        🔄 Cambios
+                    </button>
+                    <button onclick="sendToNotion(event, '${g.s3_prefix}', '${g.account_id}')"
                             style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:500;
                                    background:rgba(99,102,241,0.12); border:1px solid rgba(99,102,241,0.3); color:#a5b4fc;
                                    padding:5px 11px; border-radius:6px; cursor:pointer; transition:all .15s;"
@@ -1185,7 +1535,7 @@ function closeProfileModal() {
     document.getElementById("profile-modal").style.display = "none";
 }
 
-async function sendToNotion(s3Prefix, accountId) {
+async function sendToNotion(ev, s3Prefix, accountId) {
     // Buscar notion_page_id en el profile del grupo correspondiente
     const group = (_accountsData || []).find(g =>
         g.accounts.some(a => a.account_id === accountId)
@@ -1212,7 +1562,7 @@ async function sendToNotion(s3Prefix, accountId) {
         return;
     }
 
-    const btn = event.target.closest("button");
+    const btn = ev.target.closest("button");
     const originalText = btn.innerHTML;
     btn.disabled  = true;
     btn.innerHTML = "⏳ Enviando...";
@@ -1242,6 +1592,11 @@ async function sendToNotion(s3Prefix, accountId) {
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
+
+function _escHtml(str) {
+    return String(str).replace(/[&<>"']/g, c =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
 async function loadUsers() {
     document.getElementById("users-container").innerHTML =
@@ -1302,6 +1657,8 @@ function renderUsers(users) {
         </table>`;
 }
 
+let _usersLogData = [];
+
 async function loadUsersLog() {
     const container = document.getElementById("users-log-container");
     try {
@@ -1310,30 +1667,69 @@ async function loadUsersLog() {
         });
         if (!res.ok) { container.innerHTML = ""; return; }
         const data = await res.json();
-        const logs = data.logs || [];
-        if (!logs.length) {
-            container.innerHTML = `<p style="color:var(--text-secondary); font-size:13px;">Sin actividad registrada.</p>`;
-            return;
-        }
-        container.innerHTML = logs.map(l => {
-            const date = new Date(l.timestamp).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
-            const colors = { CREATE: "#34d399", DELETE: "#f472b6", RESET_PASSWORD: "#fbbf24" };
-            const icons  = { CREATE: "✅", DELETE: "🗑️", RESET_PASSWORD: "🔑" };
-            const verbs  = { CREATE: "creó la cuenta de", DELETE: "eliminó la cuenta de", RESET_PASSWORD: "reseteó la contraseña de" };
-            const color = colors[l.action] || "#94a3b8";
-            const icon  = icons[l.action] || "•";
-            const verb  = verbs[l.action] || l.action;
-            return `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
-                <span>${icon}</span>
-                <span style="color:var(--text-secondary);">${date}</span>
-                <span style="color:var(--text-primary); font-weight:500;">${l.user_email}</span>
-                <span style="color:var(--text-secondary);">${verb}</span>
-                <span style="color:${color}; font-weight:500;">${l.target}</span>
-            </div>`;
-        }).join("");
+        _usersLogData = data.logs || [];
+        filterUsersLog();
     } catch {
         container.innerHTML = "";
     }
+}
+
+function filterUsersLog() {
+    const period = document.getElementById("users-log-period").value;
+    let since = null;
+    if (period === "day") {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);          // desde medianoche de hoy, hora local
+        since = d.getTime();
+    } else if (period === "week") {
+        since = Date.now() - 7 * 86400000;
+    } else if (period === "month") {
+        since = Date.now() - 30 * 86400000;
+    }
+
+    let filtered = _usersLogData;
+    if (since !== null) {
+        filtered = _usersLogData.filter(l => {
+            const t = Date.parse(l.timestamp);
+            return !isNaN(t) && t >= since;
+        });
+    }
+
+    const counter = document.getElementById("users-log-count");
+    if (counter) {
+        counter.textContent = filtered.length === _usersLogData.length
+            ? `${_usersLogData.length} registro${_usersLogData.length === 1 ? "" : "s"}`
+            : `${filtered.length} de ${_usersLogData.length} registros`;
+    }
+    renderUsersLog(filtered);
+}
+
+function renderUsersLog(logs) {
+    const container = document.getElementById("users-log-container");
+    if (!logs.length) {
+        container.innerHTML = `<p style="color:var(--text-secondary); font-size:13px;">Sin actividad en el periodo seleccionado.</p>`;
+        return;
+    }
+    container.innerHTML = logs.map(l => {
+        const date = new Date(l.timestamp).toLocaleString("es-ES", { dateStyle: "medium", timeStyle: "short" });
+        const colors = { CREATE: "#34d399", DELETE: "#f472b6", RESET_PASSWORD: "#fbbf24", RESEND_INVITE: "#60a5fa" };
+        const icons  = { CREATE: "✅", DELETE: "🗑️", RESET_PASSWORD: "🔑", RESEND_INVITE: "📧" };
+        const verbs  = { CREATE: "creó la cuenta de", DELETE: "eliminó la cuenta de", RESET_PASSWORD: "reseteó la contraseña de", RESEND_INVITE: "reenvió la invitación a" };
+        const color = colors[l.action] || "#94a3b8";
+        const icon  = icons[l.action] || "•";
+        const verb  = verbs[l.action] || l.action;
+        const actor = (l.user_email || "").trim();
+        const actorHtml = actor
+            ? `<span style="color:var(--text-primary); font-weight:500;">${_escHtml(actor)}</span>`
+            : `<span style="color:var(--text-secondary); font-style:italic;" title="Registro anterior a la trazabilidad de autor">autor no registrado</span>`;
+        return `<div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px;">
+            <span>${icon}</span>
+            <span style="color:var(--text-secondary);">${date}</span>
+            ${actorHtml}
+            <span style="color:var(--text-secondary);">${verb}</span>
+            <span style="color:${color}; font-weight:500;">${_escHtml(l.target || "")}</span>
+        </div>`;
+    }).join("");
 }
 
 function openAddUser() {
@@ -1362,7 +1758,7 @@ async function createUser() {
         const res = await fetch(`${API_URL}/users`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${getToken()}` },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ email, user_email: getUserEmail() || "" }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al crear usuario");
@@ -1379,7 +1775,7 @@ async function createUser() {
 async function deleteUser(email) {
     if (!confirm(`¿Eliminar el acceso de ${email}?\nEsta acción quedará registrada.`)) return;
     try {
-        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}`, {
+        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}?user_email=${encodeURIComponent(getUserEmail() || "")}`, {
             method: "DELETE",
             headers: { "Authorization": `Bearer ${getToken()}` },
         });
@@ -1392,18 +1788,50 @@ async function deleteUser(email) {
 }
 
 async function resetUserPassword(email) {
-    if (!confirm(`¿Enviar email de reset de contraseña a ${email}?\nEl usuario recibirá un código para establecer una nueva contraseña.`)) return;
+    if (!confirm(`¿Enviar email de acceso a ${email}?\nSi aún no ha entrado nunca, recibirá una nueva contraseña temporal con las instrucciones. Si ya tiene cuenta activa, recibirá un código para establecer una nueva contraseña.`)) return;
     try {
-        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}/reset`, {
+        const res = await fetch(`${API_URL}/users/${encodeURIComponent(email)}/reset?user_email=${encodeURIComponent(getUserEmail() || "")}`, {
             method: "POST",
             headers: { "Authorization": `Bearer ${getToken()}` },
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Error al resetear");
-        alert(`✅ Email de reset enviado a ${email}`);
+        alert(data.action === "RESEND_INVITE"
+            ? `✅ Invitación reenviada a ${email} con una nueva contraseña temporal.`
+            : `✅ Email de reset enviado a ${email}`);
         loadUsers();
     } catch (err) {
         alert(err.message);
+    }
+}
+
+function openResetPassword() {
+    document.getElementById("reset-email").value = "";
+    document.getElementById("reset-code").value = "";
+    document.getElementById("reset-newpwd").value = "";
+    document.getElementById("reset-step2").style.display = "none";
+    document.getElementById("reset-subtitle").textContent = "Introduce tu correo y te enviaremos un código de verificación.";
+    showAuthScreen("resetpwd");
+}
+
+async function submitForgotPassword() {
+    const email = document.getElementById("reset-email").value.trim();
+    if (!email) { showAuthError("Introduce tu correo."); return; }
+    const btn = document.getElementById("reset-send-btn");
+    btn.disabled = true; btn.textContent = "Enviando...";
+    document.getElementById("auth-error").style.display = "none";
+    try {
+        await cognitoRequest("AWSCognitoIdentityProviderService.ForgotPassword", {
+            ClientId: CLIENT_ID,
+            Username: email,
+        });
+        document.getElementById("reset-step2").style.display = "block";
+        document.getElementById("reset-subtitle").textContent = "Te enviamos un código a tu correo. Introdúcelo junto con tu nueva contraseña.";
+        document.getElementById("reset-code").focus();
+    } catch (err) {
+        showAuthError(_translateCognitoError(err.message));
+    } finally {
+        btn.disabled = false; btn.textContent = "Enviar código";
     }
 }
 
@@ -1549,6 +1977,7 @@ function switchDashboardTab(tab) {
     document.getElementById('dtab-summary').classList.toggle('active', tab === 'summary');
     document.getElementById('dtab-alerts').classList.toggle('active', tab === 'alerts');
     if (tab === 'alerts') loadAlerts();
+    if (tab === 'summary') drawArchDiagram();
 }
 
 let _alertsData = [];

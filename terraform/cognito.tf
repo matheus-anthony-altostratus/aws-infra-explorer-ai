@@ -5,9 +5,34 @@ resource "aws_cognito_user_pool" "main" {
   admin_create_user_config {
     allow_admin_create_user_only = true
     invite_message_template {
-      email_subject = "Bienvenido a Infra Explorer AI — Altostratus"
-      email_message = "Hola,\n\nTu cuenta ha sido creada en Infra Explorer AI.\n\nEmail: {username}\nContraseña temporal: {####}\n\nAccede en: https://d2y8h0jbecvclg.cloudfront.net\nDeberás cambiar tu contraseña en el primer inicio de sesión.\n\nAltostratus CMC Team"
-      sms_message   = "{username} — Tu contraseña temporal para Infra Explorer AI es: {####}"
+      email_subject = "Tu acceso a Infra Explorer AI — crea tu contraseña"
+      email_message = <<-EOT
+        <p>Hola,</p>
+
+        <p>Se te ha dado acceso a <strong>Infra Explorer AI</strong>, la herramienta interna de Altostratus.</p>
+
+        <p><strong>Tu contraseña definitiva la creas tú en el primer inicio de sesión.</strong>
+        Para ello necesitas esta contraseña temporal de un solo uso:</p>
+
+        <table cellpadding="10" style="border:1px solid #d0d7e2; border-radius:8px; background:#f5f8ff;">
+          <tr><td>Usuario:</td><td><strong>{username}</strong></td></tr>
+          <tr><td>Contraseña temporal:</td><td><strong style="font-size:16px;">{####}</strong></td></tr>
+        </table>
+
+        <p><strong>Pasos a seguir:</strong></p>
+        <ol>
+          <li>Entra en <a href="https://d2y8h0jbecvclg.cloudfront.net">https://d2y8h0jbecvclg.cloudfront.net</a></li>
+          <li>Inicia sesión con tu correo y la <em>contraseña temporal</em> de arriba.</li>
+          <li>La aplicación te pedirá inmediatamente que <strong>establezcas tu contraseña definitiva</strong>. Esa será la que uses a partir de ese momento.</li>
+        </ol>
+
+        <p>La contraseña definitiva debe tener mínimo 8 caracteres, con al menos una mayúscula, una minúscula y un número.</p>
+
+        <p><strong>Importante:</strong> la contraseña temporal caduca en 7 días. Si expira, pide a un compañero del equipo CMC-AWS que pulse "Reset" sobre tu usuario para recibir un correo nuevo.</p>
+
+        <p>Altostratus CMC Team</p>
+      EOT
+      sms_message   = "Infra Explorer AI — usuario {username}, contraseña temporal {####}. Al entrar tendrás que crear tu contraseña definitiva."
     }
   }
 

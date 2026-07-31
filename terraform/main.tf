@@ -21,3 +21,6 @@ provider "aws" {
     }
   }
 }
+
+# Salvaguarda: detecta si el perfil aws-vault activo apunta a otra cuenta
+data "aws_caller_identity" "current" {}

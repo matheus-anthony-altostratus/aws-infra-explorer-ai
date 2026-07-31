@@ -434,15 +434,28 @@ cd terraform && terraform init && terraform apply
 | 11 | Diagrama draw.io con 8 pestañas + extractores DynamoDB e IAM | ✅ |
 | 12 | Service Profile — ficha técnica y runbook operativo por cliente | ✅ |
 | 13 | Gestión de usuarios — administración controlada + auditoría | ✅ |
-| 14 | Health Score — puntuación automática de seguridad y buenas prácticas | ✅ |
+| 14 | Health Score — puntuación automática (penaliza una vez por tipo de problema, con tope a severidades menores) | ✅ |
 | 15 | Dashboard operativo — panel de estado de todos los clientes | ✅ |
 | 16 | Alertas de seguridad — detección inmediata de configuraciones peligrosas | ✅ |
-| 17 | Comparación entre análisis (Diff) — detectar cambios en la infraestructura | 🔧 En desarrollo |
+| 17 | Comparación entre análisis (Diff) — detectar cambios en la infraestructura | ✅ |
 | 18 | Análisis multi-región — consolidar varias regiones en un único output | ⬜ Fase futura |
-| 19 | Integración con Notion — publicar análisis automáticamente | ⬜ Fase futura |
-| 20 | Exportar a PDF con branding Altostratus | ⬜ Fase futura |
-| 21 | Métricas de uso del equipo — estadísticas de análisis y actividad | ⬜ Fase futura |
-| 22 | Resumen semanal automatizado — email con estado de clientes | ⬜ Fase futura |
+| 19 | Integración con Notion — publicar análisis automáticamente | ✅ (pendiente reunión) |
 | 23 | Chatbot sobre infraestructura — preguntas en lenguaje natural (Bedrock + RAG) | ⬜ Fase futura |
 | 24 | Integración con ServiceNow — creación automática de tickets desde alertas | ⬜ Fase futura |
 | 25 | Dominio personalizado (Route 53 + ACM) | ⬜ Fase futura |
+| 26 | Análisis multicuenta por cliente — el ingeniero elige varias cuentas; se analizan y se mapean las interconexiones (TGW, VPC peering, VPN, Direct Connect) entre ellas | 🔧 Próxima |
+| 27 | Integración con Slack — bot para lanzar análisis y consultar/diagnosticar la infraestructura desde Slack | ⬜ Fase futura |
+
+---
+
+## Backlog técnico — mejoras pendientes
+
+Notas de revisión del proyecto. No bloquean el uso actual, pero conviene abordarlas.
+
+| # | Mejora | Tipo | Prioridad | Notas |
+|---|---|---|---|---|
+| B1 | Eliminar `terraform.tfstate` de la raíz del repo y ampliar `.gitignore` para ignorar cualquier `*.tfstate` en cualquier ruta | Seguridad / Limpieza | Alta | El state de la raíz está vacío hoy, pero no está cubierto por el `.gitignore` (solo se ignora `terraform/**`). Riesgo si alguien ejecuta `terraform` desde la raíz. |
+| B2 | Dashboard y alertas se refrescan solos mediante análisis programado (EventBridge Scheduler) | Funcionalidad | Alta | Hoy el dashboard muestra la foto del último análisis manual. Un cron semanal que reanalice las cuentas registradas mantiene los datos frescos y habilita el resumen semanal por email. |
+| B3 | Tests automatizados para `_generate_security_alerts` y `_calculate_health_score` | Robustez | Media | Son funciones puras (no tocan AWS), ideales para `pytest`. Protegen la lógica de alertas/score ante cambios accidentales de umbrales. |
+| B4 | Sincronizar nombre de rol en `src/main.py` (CLI local usa `cct_role_read_only`) con el del Lambda (`infra-explorer-read-only`) | Consistencia | Baja | El CLI local quedó desincronizado respecto al despliegue real y al README. |
+| B5 | Limpiar `requirements.txt` (fastapi, uvicorn, jinja2, markdown son legacy de la versión web local; Lambda solo necesita boto3) | Limpieza | Baja | Considerar separar `requirements-dev.txt`. |

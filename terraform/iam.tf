@@ -87,6 +87,12 @@ resource "aws_iam_role_policy" "lambda_custom" {
           "cognito-idp:ListUsers"
         ]
         Resource = aws_cognito_user_pool.main.arn
+      },
+      {
+        Sid      = "NotionSecret"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = "arn:aws:secretsmanager:*:590183851235:secret:infra-explorer/notion-token-*"
       }
     ]
   })

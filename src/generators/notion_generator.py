@@ -92,6 +92,7 @@ class NotionGenerator:
 
     def create_analysis_page(self,
                               parent_page_id: str,
+                              group_name:     str,
                               account_name:   str,
                               account_id:     str,
                               region:         str,
@@ -104,7 +105,7 @@ class NotionGenerator:
         Devuelve la URL de la página creada.
         """
         now   = datetime.now(timezone.utc)
-        title = f"Análisis AWS {region} — {now.strftime('%d/%m/%Y %H:%M')}"
+        title = f"Análisis — {account_name} ({region}) — {now.strftime('%d/%m/%Y %H:%M')}"
 
         # ── Crear la página vacía ─────────────────────────────────────────────
         page = self._request("POST", "/pages", {
@@ -123,12 +124,14 @@ class NotionGenerator:
 
         # Callout de metadatos
         meta = (
-            f"🏢  Cliente: {account_name}\n"
+            f"🏢  Cliente: {group_name or '—'}\n"
+            f"🗂️  Cuenta: {account_name}\n"
             f"🔑  Account ID: {account_id}\n"
             f"🌍  Región: {region}\n"
-            f"👤  Analizado por: {user_email}\n"
+            f"👤  Analizado por: {user_email or '—'}\n"
             f"📅  Fecha: {now.strftime('%d/%m/%Y a las %H:%M UTC')}"
         )
+
         blocks.append(self._callout(meta, "☁️"))
         blocks.append(self._divider())
 

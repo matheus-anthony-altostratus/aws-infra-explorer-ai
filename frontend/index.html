@@ -259,6 +259,12 @@
         .tab-content { display: none; }
         .tab-content.active { display: block; }
 
+        /* Segmented control (tabs dashboard) */
+        .seg-nav { display:inline-flex; background:#0d1424; border:1px solid var(--border); border-radius:10px; padding:4px; gap:4px; }
+        .seg-btn { padding:8px 18px; font-size:13px; font-weight:600; color:var(--text-secondary); background:none; border:none; border-radius:7px; cursor:pointer; transition:all .15s; }
+        .seg-btn:hover { color:var(--text-primary); }
+        .seg-btn.active { background:linear-gradient(135deg, rgba(1,102,255,0.25), rgba(20,29,94,0.55)); color:#fff; box-shadow:0 2px 10px rgba(1,102,255,0.25); }
+
         /* Markdown */
         .markdown-body h1 { font-size: 1.5rem; font-weight: 700; margin: 1.5rem 0 0.75rem; color: #f1f5f9; }
         .markdown-body h2 { font-size: 1.25rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: #e2e8f0; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
@@ -275,7 +281,7 @@
         .markdown-body blockquote { border-left: 3px solid var(--accent-blue); padding-left: 12px; color: #64748b; margin: 8px 0; }
 
         /* Diagram */
-        #arch-diagram { width: 100%; height: 320px; }
+        #arch-diagram { width: 100%; height: 360px; display: block; }
 
         /* Status bar */
         .status-bar {
@@ -404,9 +410,12 @@
                         <input id="login-password" type="password" placeholder="••••••••" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitLogin()">
                     </div>
                     <button id="login-btn" onclick="submitLogin()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Iniciar sesión</button>
+                    <div style="background:rgba(1,102,255,0.08); border:1px solid rgba(1,102,255,0.2); border-radius:8px; padding:10px 14px; margin-bottom:16px;">
+                        <p style="font-size:12px; color:#60a5fa; margin:0;">👋 <strong>¿Primera vez?</strong> Entra con la contraseña temporal que recibiste por correo. Al hacerlo te pediremos que crees tu contraseña definitiva.</p>
+                    </div>
                     <div style="text-align:center; font-size:13px; color:#64748b; margin:0;">
                         <p style="margin:0 0 6px;">¿No tienes cuenta? Solicítala a un compañero del equipo CMC-AWS.</p>
-                        <a onclick="showAuthScreen('resetpwd')" style="color:#60a5fa; cursor:pointer;">¿Olvidaste tu contraseña?</a>
+                        <a onclick="openResetPassword()" style="color:#60a5fa; cursor:pointer;">¿Olvidaste tu contraseña?</a>
                     </div>
                 </div>
 
@@ -463,22 +472,33 @@
                     <div style="text-align:center; margin-bottom:20px;">
                         <span style="font-size:40px;">🔑</span>
                         <h2 style="font-size:18px; font-weight:600; margin:8px 0 4px; color:#f1f5f9;">Restablecer contraseña</h2>
-                        <p style="font-size:13px; color:#64748b; margin:0;">Introduce el código que recibiste por email y tu nueva contraseña.</p>
+                        <p id="reset-subtitle" style="font-size:13px; color:#64748b; margin:0;">Introduce tu correo y te enviaremos un código de verificación.</p>
                     </div>
                     <div style="margin-bottom:14px;">
                         <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Correo</label>
-                        <input id="reset-email" type="email" placeholder="nombre@altostratus.es" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;">
+                        <input id="reset-email" type="email" placeholder="nombre@altostratus.es" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitForgotPassword()">
                     </div>
-                    <div style="margin-bottom:14px;">
-                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Código de verificación</label>
-                        <input id="reset-code" type="text" placeholder="123456" maxlength="6" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:18px; letter-spacing:0.3em; text-align:center; outline:none; box-sizing:border-box;">
+
+                    <!-- PASO 1: pedir código -->
+                    <div id="reset-step1">
+                        <button id="reset-send-btn" onclick="submitForgotPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Enviar código</button>
                     </div>
-                    <div style="margin-bottom:20px;">
-                        <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Nueva contraseña</label>
-                        <input id="reset-newpwd" type="password" placeholder="Mínimo 8 caracteres" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitResetPassword()">
+
+                    <!-- PASO 2: código + nueva contraseña -->
+                    <div id="reset-step2" style="display:none;">
+                        <div style="margin-bottom:14px;">
+                            <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Código de verificación</label>
+                            <input id="reset-code" type="text" placeholder="123456" maxlength="6" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:18px; letter-spacing:0.3em; text-align:center; outline:none; box-sizing:border-box;">
+                        </div>
+                        <div style="margin-bottom:20px;">
+                            <label style="display:block; font-size:12px; font-weight:500; color:#94a3b8; margin-bottom:6px;">Nueva contraseña</label>
+                            <input id="reset-newpwd" type="password" placeholder="Mínimo 8 caracteres" style="width:100%; background:#060d1a; border:1px solid #1e2a45; border-radius:8px; padding:10px 14px; color:#f1f5f9; font-size:14px; outline:none; box-sizing:border-box;" onkeydown="if(event.key==='Enter') submitResetPassword()">
+                        </div>
+                        <button id="resetpwd-btn" onclick="submitResetPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:10px;">Restablecer contraseña</button>
+                        <p style="text-align:center; font-size:12px; color:#64748b; margin:0 0 6px;"><a onclick="submitForgotPassword()" style="color:#60a5fa; cursor:pointer;">Reenviar código</a></p>
                     </div>
-                    <button id="resetpwd-btn" onclick="submitResetPassword()" style="width:100%; background:linear-gradient(135deg,#0166ff,#0052cc); color:white; border:none; padding:12px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:16px;">Restablecer contraseña</button>
-                    <p style="text-align:center; font-size:13px; color:#64748b; margin:0;"><a onclick="showAuthScreen('login')" style="color:#60a5fa; cursor:pointer;">Volver al login</a></p>
+
+                    <p style="text-align:center; font-size:13px; color:#64748b; margin:16px 0 0;"><a onclick="showAuthScreen('login')" style="color:#60a5fa; cursor:pointer;">Volver al login</a></p>
                 </div>
 
             </div>
@@ -528,6 +548,11 @@
                 Analizador
             </a>
 
+            <a class="sidebar-item" onclick="navigate('connections')" id="nav-connections">
+                <svg class="sidebar-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                Conexiones
+            </a>
+
             <div class="sidebar-label">Recursos</div>
 
             <a class="sidebar-item" onclick="navigate('history')" id="nav-history">
@@ -569,9 +594,9 @@
                 </div>
 
                 <!-- Dashboard tabs -->
-                <div class="tab-nav" style="margin-bottom:24px;">
-                    <button class="tab-btn active" onclick="switchDashboardTab('summary')" id="dtab-summary">📊 Resumen</button>
-                    <button class="tab-btn" onclick="switchDashboardTab('alerts')" id="dtab-alerts">🚨 Alertas</button>
+                <div class="seg-nav" style="margin-bottom:24px;">
+                    <button class="seg-btn active" onclick="switchDashboardTab('summary')" id="dtab-summary">📊 Resumen</button>
+                    <button class="seg-btn" onclick="switchDashboardTab('alerts')" id="dtab-alerts">🚨 Alertas</button>
                 </div>
 
                 <!-- TAB: Resumen -->
@@ -615,17 +640,20 @@
                         <h3 style="font-size:14px; font-weight:600; color:#60a5fa; margin:0;">ℹ️ ¿Qué es el Health Score?</h3>
                     </div>
                     <div id="hs-legend" style="display:none; padding:0 20px 20px; font-size:13px; color:var(--text-secondary); line-height:1.7;">
-                        <p style="margin:0 0 12px;">Puntuación automática de <strong style="color:var(--text-primary);">0 a 100</strong> que evalúa la seguridad y buenas prácticas de una cuenta AWS. Se calcula con cada análisis — sin IA, reglas deterministas.</p>
+                        <p style="margin:0 0 12px;">Puntuación automática de <strong style="color:var(--text-primary);">0 a 100</strong> que resume la seguridad y las buenas prácticas de una cuenta AWS. Se calcula con reglas fijas en cada análisis.</p>
+
+                        <p style="margin:0 0 6px;"><strong style="color:var(--text-primary);">Cómo se calcula:</strong> toda cuenta parte de <strong style="color:var(--text-primary);">100</strong> y pierde puntos por cada <em>tipo</em> de problema detectado.</p>
+                        <p style="margin:0 0 14px; padding:10px 12px; background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.25); border-radius:8px;">⚠️ <strong style="color:var(--text-primary);">Cada tipo de problema resta una sola vez</strong>, sin importar cuántos recursos lo tengan. Ejemplo: 8 usuarios sin MFA cuentan como <strong style="color:var(--text-primary);">un único problema (−10)</strong>, no como −80. En el listado de 🚨 Alertas verás los 8 por separado, pero al score solo le resta una vez.</p>
 
                         <p style="margin:0 0 8px; font-weight:600; color:var(--text-primary);">Escala de colores</p>
-                        <div style="display:flex; gap:16px; margin-bottom:16px;">
-                            <span>🟢 ≥ 80 — Saludable</span>
+                        <div style="display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap;">
+                            <span>🟢 80 o más — Saludable</span>
                             <span>🟡 50–79 — Mejorable</span>
-                            <span>🔴 < 50 — Crítico</span>
+                            <span>🔴 menos de 50 — Crítico</span>
                             <span>⚪ Sin análisis</span>
                         </div>
 
-                        <p style="margin:0 0 8px; font-weight:600; color:var(--text-primary);">Penalizaciones aplicadas</p>
+                        <p style="margin:0 0 8px; font-weight:600; color:var(--text-primary);">Penalización por tipo de problema</p>
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
                             <thead>
                                 <tr style="border-bottom:1px solid var(--border);">
@@ -635,17 +663,27 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS públicamente accesible</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">-15</td><td style="text-align:center;">🔴 Crítica</td></tr>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Security Group con 0.0.0.0/0 en puerto sensible (22, 3389, 3306...)</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">-10</td><td style="text-align:center;">🟠 Alta</td></tr>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS sin Multi-AZ</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">-8</td><td style="text-align:center;">🟡 Media</td></tr>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">VPC con un solo NAT Gateway</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">-5</td><td style="text-align:center;">🟡 Baja</td></tr>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Elastic IP no asociada</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-3</td><td style="text-align:center;">⚪ Baja</td></tr>
-                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Instancia EC2 detenida (stopped)</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-3</td><td style="text-align:center;">⚪ Baja</td></tr>
-                                <tr><td style="padding:6px 10px;">Instancias EC2 sin tag Name</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">-2 (máx -10)</td><td style="text-align:center;">⚪ Info</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS accesible públicamente</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">−15</td><td style="text-align:center;">🔴 Crítica</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Security Group con TODOS los puertos abiertos a internet</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">−15</td><td style="text-align:center;">🔴 Crítica</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">SSH (22) o RDP (3389) abierto a internet</td><td style="text-align:center; padding:6px 10px; color:#f472b6;">−15</td><td style="text-align:center;">🔴 Crítica</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Puerto de base de datos (3306, 5432, 1433…) abierto a internet</td><td style="text-align:center; padding:6px 10px; color:#fb923c;">−10</td><td style="text-align:center;">🟠 Alta</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Cualquier otro puerto abierto a internet (0.0.0.0/0)</td><td style="text-align:center; padding:6px 10px; color:#fb923c;">−10</td><td style="text-align:center;">🟠 Alta</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">RDS sin Multi-AZ (sin alta disponibilidad)</td><td style="text-align:center; padding:6px 10px; color:#fb923c;">−10</td><td style="text-align:center;">🟠 Alta</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Usuario IAM sin MFA habilitado</td><td style="text-align:center; padding:6px 10px; color:#fb923c;">−10</td><td style="text-align:center;">🟠 Alta</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Rango amplio de puertos (más de 100) abierto a internet</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">−5</td><td style="text-align:center;">🟡 Media</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">VPC con un solo NAT Gateway (sin redundancia)</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">−5</td><td style="text-align:center;">🟡 Media</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Instancia EC2 detenida (stopped)</td><td style="text-align:center; padding:6px 10px; color:#fbbf24;">−5</td><td style="text-align:center;">🟡 Media</td></tr>
+                                <tr style="border-bottom:1px solid var(--border);"><td style="padding:6px 10px;">Elastic IP sin asociar (coste innecesario)</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">−3</td><td style="text-align:center;">🔵 Baja</td></tr>
+                                <tr><td style="padding:6px 10px;">Instancias EC2 sin tag Name</td><td style="text-align:center; padding:6px 10px; color:var(--text-secondary);">−2</td><td style="text-align:center;">⚪ Info</td></tr>
                             </tbody>
                         </table>
+                        <p style="margin:10px 0 0; font-size:12px;">Las severidades menores (🔵 Baja + ⚪ Info) no pueden restar más de <strong style="color:var(--text-primary);">10 puntos</strong> en total.</p>
 
-                        <p style="margin:16px 0 0; font-size:12px; color:var(--text-secondary);">💡 El score se recalcula cada vez que se ejecuta un nuevo análisis sobre la cuenta.</p>
+                        <p style="margin:16px 0 6px; font-weight:600; color:var(--text-primary);">Ejemplo</p>
+                        <p style="margin:0 0 4px; font-size:12px;">Cuenta con SSH abierto, otro puerto abierto a internet, 8 usuarios sin MFA, 2 EC2 detenidas y un solo NAT Gateway:</p>
+                        <p style="margin:0; font-size:13px; font-family:monospace; color:var(--text-primary);">100 − 15 − 10 − 10 − 5 − 5 = <strong>55</strong></p>
+
+                        <p style="margin:16px 0 0; font-size:12px; color:var(--text-secondary);">💡 El score se recalcula en cada análisis. Mira la pestaña 🚨 Alertas para ver el detalle de cada hallazgo.</p>
                     </div>
                 </div>
 
@@ -719,6 +757,7 @@
                         <div style="margin-bottom:20px;">
                             <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Región</label>
                             <select id="region" class="input-field">
+                                <option value="eu-south-2">EU South 2 — España</option>
                                 <option value="eu-west-1">EU West 1 — Ireland</option>
                                 <option value="eu-west-2">EU West 2 — London</option>
                                 <option value="eu-west-3">EU West 3 — Paris</option>
@@ -772,6 +811,7 @@
                         <div class="tab-nav">
                             <button class="tab-btn active" onclick="switchTab('documentation')" data-tab="documentation">📄 Documentación</button>
                             <button class="tab-btn" onclick="switchTab('suggestions')" data-tab="suggestions">💡 Sugerencias</button>
+                            <button class="tab-btn" onclick="switchTab('changes')" data-tab="changes">🔄 Cambios</button>
                         </div>
                         <div id="tab-documentation" class="tab-content active" style="max-height:560px; overflow-y:auto;">
                             <div id="docContent" class="markdown-body"></div>
@@ -779,6 +819,14 @@
                         <div id="tab-suggestions" class="tab-content" style="max-height:560px; overflow-y:auto;">
                             <div id="sugContent" class="markdown-body"></div>
                         </div>
+                        <div id="tab-changes" class="tab-content" style="max-height:560px; overflow-y:auto;">
+                            <div id="changesContent"></div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="network-preview-card" style="margin-bottom:20px; display:none;">
+                        <h3 style="font-size:14px; font-weight:600; margin:0 0 14px;">🌐 Diagrama de red (resumen)</h3>
+                        <img id="network-preview-img" style="width:100%; border-radius:10px; border:1px solid var(--border); display:block;" alt="Diagrama de red">
                     </div>
 
                     <div class="card" style="margin-bottom:20px;">
@@ -787,6 +835,98 @@
                     </div>
 
                     <button onclick="resetForm()" class="btn-secondary">🔄 Nuevo Análisis</button>
+                </div>
+
+            </section>
+
+            <!-- ===== SECCIÓN: CONEXIONES (MULTICUENTA) ===== -->
+            <section class="section" id="section-connections">
+
+                <div style="margin-bottom:24px;">
+                    <h1 style="font-size:24px; font-weight:700; margin:0 0 6px;">Conexiones entre cuentas</h1>
+                    <p style="color:var(--text-secondary); font-size:14px; margin:0;">Analiza varias cuentas de un mismo cliente y descubre cómo se interconectan (VPC peering, Transit Gateway…).</p>
+                </div>
+
+                <!-- Formulario -->
+                <div id="multi-form-section" style="max-width:560px;">
+                    <div class="card card-accent" style="margin-bottom:16px;">
+
+                        <div id="multi-error-box" style="display:none; background:rgba(242,14,112,0.1); border:1px solid rgba(242,14,112,0.3); color:#f472b6; padding:12px 16px; border-radius:8px; font-size:13px; margin-bottom:20px;"></div>
+
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Cliente</label>
+                            <select id="multi-group" class="input-field" onchange="onMultiGroupChange()">
+                                <option value="">— Selecciona un cliente —</option>
+                            </select>
+                        </div>
+
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Cuentas a comparar (mínimo 2)</label>
+                            <div id="multi-accounts">
+                                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Selecciona un cliente para ver sus cuentas.</p>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:20px;">
+                            <label style="display:block; font-size:13px; font-weight:500; color:var(--text-secondary); margin-bottom:6px;">Región</label>
+                            <select id="multi-region" class="input-field">
+                                <option value="eu-south-2">EU South 2 — España</option>
+                                <option value="eu-west-1">EU West 1 — Ireland</option>
+                                <option value="eu-west-2">EU West 2 — London</option>
+                                <option value="eu-west-3">EU West 3 — Paris</option>
+                                <option value="eu-central-1">EU Central 1 — Frankfurt</option>
+                                <option value="us-east-1">US East 1 — N. Virginia</option>
+                                <option value="us-east-2">US East 2 — Ohio</option>
+                                <option value="us-west-1">US West 1 — N. California</option>
+                                <option value="us-west-2">US West 2 — Oregon</option>
+                                <option value="sa-east-1">SA East 1 — São Paulo</option>
+                                <option value="ap-southeast-1">AP Southeast 1 — Singapore</option>
+                                <option value="ap-northeast-1">AP Northeast 1 — Tokyo</option>
+                            </select>
+                        </div>
+
+                        <div style="background:rgba(1,102,255,0.08); border:1px solid rgba(1,102,255,0.2); border-radius:8px; padding:12px 14px; margin-bottom:20px;">
+                            <p style="font-size:12px; color:#60a5fa; margin:0; line-height:1.6;">
+                                🔗 Cada cuenta se analiza con el rol <code style="background:rgba(1,102,255,0.2); padding:1px 5px; border-radius:3px;">infra-explorer-read-only</code>. Las conexiones se detectan cruzando los recursos y se explican con IA.
+                            </p>
+                        </div>
+
+                        <button id="multi-submitBtn" onclick="analyzeMulti()" class="btn-primary">
+                            <span id="multi-btnText">🔗 Analizar conexiones</span>
+                            <span id="multi-btnLoading" style="display:none; align-items:center; gap:8px;">
+                                <svg class="animate-spin" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="display:inline;"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-opacity=".25"/><path d="M21 12a9 9 0 00-9-9" stroke="currentColor"/></svg>
+                                <span id="multi-step-label">Iniciando análisis...</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Resultados -->
+                <div id="multi-results-section" style="display:none;">
+                    <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px; padding:16px 20px; margin-bottom:24px; display:flex; align-items:center; gap:12px;">
+                        <span style="font-size:20px;">✅</span>
+                        <div>
+                            <p style="font-size:14px; font-weight:600; color:#34d399; margin:0;">Análisis de conexiones completado</p>
+                            <p style="font-size:13px; color:var(--text-secondary); margin:2px 0 0;">Región: <span id="multi-resultRegion" style="color:var(--text-primary);"></span></p>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:20px;">
+                        <h3 style="font-size:14px; font-weight:600; margin:0 0 14px;">Cuentas analizadas</h3>
+                        <div id="multi-accounts-summary" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px;"></div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:20px;">
+                        <h3 style="font-size:14px; font-weight:600; margin:0 0 14px;">🔗 Conexiones detectadas</h3>
+                        <div id="multi-connections"></div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:20px;">
+                        <h3 style="font-size:14px; font-weight:600; margin:0 0 14px;">🤖 Explicación</h3>
+                        <div id="multi-narrative" class="markdown-body" style="max-height:560px; overflow-y:auto;"></div>
+                    </div>
+
+                    <button onclick="resetMultiForm()" class="btn-secondary">🔄 Nuevo análisis</button>
                 </div>
 
             </section>
@@ -1039,8 +1179,19 @@
                 </div>
 
                 <div class="card" style="margin-bottom:20px;">
-                    <h2 style="font-size:15px; font-weight:600; margin:0 0 16px; color:var(--text-secondary);">📋 Registro de actividad</h2>
-                    <div id="users-log-container">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap;">
+                        <h2 style="font-size:15px; font-weight:600; margin:0; color:var(--text-secondary);">📋 Registro de actividad</h2>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span id="users-log-count" style="font-size:12px; color:var(--text-secondary);"></span>
+                            <select id="users-log-period" class="input-field" style="width:auto; padding:6px 12px; font-size:12px;" onchange="filterUsersLog()">
+                                <option value="all">Todo el histórico</option>
+                                <option value="day">Hoy</option>
+                                <option value="week">Últimos 7 días</option>
+                                <option value="month">Últimos 30 días</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="users-log-container" style="max-height:340px; overflow-y:auto; padding-right:8px;">
                         <p style="color:var(--text-secondary); font-size:14px;">Cargando...</p>
                     </div>
                 </div>
@@ -1054,7 +1205,7 @@
                         </div>
                         <div style="display:flex; gap:10px; align-items:flex-start;">
                             <span style="font-size:16px;">2️⃣</span>
-                            <p style="margin:0;"><strong style="color:var(--text-primary);">Email automático:</strong> El sistema envía un email al usuario con su contraseña temporal.</p>
+                            <p style="margin:0;"><strong style="color:var(--text-primary);">Email automático:</strong> El sistema envía un email al usuario con su contraseña temporal, válida 7 días. Si caduca, pulsa "🔑 Reset" para reenviarla.</p>
                         </div>
                         <div style="display:flex; gap:10px; align-items:flex-start;">
                             <span style="font-size:16px;">3️⃣</span>
